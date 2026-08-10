@@ -24,21 +24,19 @@ jobs:
       - name: Build documentation and check links
         run: mkdocs build --strict
 
-  # Publishes the site built above to the gh-pages branch via mike, mkdocs-material's
-  # versioning tool. mike commits each deploy under a version directory (e.g. "dev" or
-  # a release tag) and maintains a "latest" alias, so gh-pages ends up serving both a
-  # specific version and an always-current /latest/ path from a single branch.
+  # Builds the versioned site with mike, mkdocs-material's versioning tool, then
+  # publishes it through GitHub Pages' Actions-based deployment. mike still commits
+  # each deploy to the gh-pages branch (under a version directory, e.g. "dev" or a
+  # release tag, plus a "latest" alias) - that branch is only used as mike's durable
+  # history of built versions across runs. This repo's Pages source is configured as
+  # "GitHub Actions" (build_type: workflow, confirmed via the Pages API), which never
+  # serves the branch directly, so the freshly-committed gh-pages tree is re-checked
+  # out and uploaded as a Pages artifact, then published with actions/deploy-pages.
   #
   # Only runs for pushes to the repo's default branch and for published GitHub
   # releases - never for pull requests, so untrusted PR branches can't push docs.
-  #
-  # MANUAL SETUP REQUIRED (one-time, repo Settings, cannot be done from this file):
-  #   Settings -> Pages -> Source -> "Deploy from a branch" -> gh-pages / (root)
-  #   The gh-pages branch itself is created automatically by the first successful
-  #   run of this job (via `mike deploy --push`), so create it in Settings only
-  #   after that first run has completed.
   deploy:
-    name: Deploy documentation (mike)
+    name: Deploy documentation (mike + GitHub Pages)
     needs: build
     if: >
       github.event_name == 'release' ||
@@ -57,6 +55,11 @@ jobs:
       cancel-in-progress: false
     permissions:
       contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -77,3 +80,13 @@ jobs:
         run: mike deploy --push --update-aliases "${{ github.event.release.tag_name }}" latest
       - name: Point the site root at the latest version
         run: mike set-default --push latest
+      - name: Check out the published gh-pages tree
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages-site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: gh-pages-site
+      - id: deployment
+        uses: actions/deploy-pages@v4
