@@ -1,1115 +1,1063 @@
-
 <!DOCTYPE html>
 
-<html class="no-js" lang="en">
+<html lang="en">
 <head>
+<script>
+        /* const base_url = "https://docs.mitmania.com/latest"; */
+        const base_url = (new URL("../..", window.location)).href.replace(/\/+$/, ""); /* for search plugin notably */
+        /* const root_relative_url = "../.."; */
+    </script>
+<script integrity="sha384-m6cZ+Whl1ci89lidlu8DH4C+sZLNOYBvImtjUIhUK+iaNffXhqtbYgBVuuPfRsa0" src="../../js/dark.js"></script>
 <meta charset="utf-8"/>
-<meta content="width=device-width,initial-scale=1" name="viewport"/>
-<meta content="Distributed policy and interception proxy for controlled egress" name="description"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>Request pipeline</title>
 <link href="https://docs.mitmania.com/latest/concepts/pipeline/" rel="canonical"/>
-<link href="../control-plane/" rel="prev"/>
-<link href="../certificates/" rel="next"/>
-<link href="../../assets/images/favicon.png" rel="icon"/>
-<meta content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7" name="generator"/>
-<title>Request pipeline - mitmania</title>
-<link href="../../assets/stylesheets/main.ec1eaa64.min.css" rel="stylesheet"/>
-<link href="../../assets/stylesheets/palette.ab4e12ef.min.css" rel="stylesheet"/>
-<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
-<link href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&amp;display=fallback" rel="stylesheet"/>
-<style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
-<script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+<!-- Open Graph (Facebook, LinkedIn) -->
+<meta content="Request pipeline" property="og:title"/>
+<meta content="https://docs.mitmania.com/latest/concepts/pipeline/" property="og:url"/>
+<!-- Twitter Card -->
+<meta content="Request pipeline" name="twitter:title"/>
+<!-- JSON-LD Structured Data -->
+<link href="../../img/favicon.ico" rel="icon"/>
+<link href="../../css/base.css" rel="stylesheet"/>
+<link href="../../css/geist.css" rel="stylesheet"/>
+<style>
+        :root {
+            --theme-accent: oklch(62.3% 0.214 259.815);
+        }
+    </style>
+<script integrity="sha384-V2jkXRy811qODUbfkLlkVJYBbf4h6XHAEjcU6ReASBPrJvTrlYh4GrI4t6GCju6n" src="../../js/callbacks.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        document.querySelectorAll("a.headerlink").forEach(function (link) {
+            link.addEventListener("click", function (e) {
+                e.preventDefault();
+
+                // Build the full URL with the anchor fragment
+                const url = window.location.origin + window.location.pathname + this.getAttribute("href");
+
+                navigator.clipboard.writeText(url).then(function () {
+                    // Optional: brief visual feedback
+                });
+            });
+        });
+    });
+</script>
 </head>
-<body data-md-color-accent="indigo" data-md-color-primary="indigo" data-md-color-scheme="default" dir="ltr">
-<input autocomplete="off" class="md-toggle" data-md-toggle="drawer" id="__drawer" type="checkbox"/>
-<input autocomplete="off" class="md-toggle" data-md-toggle="search" id="__search" type="checkbox"/>
-<label class="md-overlay" for="__drawer"></label>
-<div data-md-component="skip">
-<a class="md-skip" href="#request-pipeline">
-          Skip to content
-        </a>
+<body class="text-foreground group/body overscroll-none font-sans antialiased [--footer-height:calc(var(--spacing)*14)] [--header-height:calc(var(--spacing)*14)] xl:[--footer-height:calc(var(--spacing)*24)] theme-default">
+<div class="bg-background relative z-10 flex min-h-svh flex-col" id="inner-body">
+<header class="bg-background sticky top-0 z-50 w-full" view-transition-name="header">
+<div class="container-wrapper 3xl:fixed:px-0 px-6">
+<div class="3xl:fixed:container flex h-(--header-height) items-center gap-2 **:data-[slot=separator]:!h-4">
+<button aria-controls="radix-«Rmplb»" aria-expanded="false" aria-haspopup="dialog" class="group whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:pointer-events-none [&amp;_svg:not([class*='size-'])]:size-4 shrink-0 [&amp;_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:text-accent-foreground px-4 py-2 has-[&gt;svg]:px-3 extend-touch-target h-8 touch-manipulation items-center justify-start gap-2.5 !p-0 hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 active:bg-transparent dark:hover:bg-transparent flex lg:hidden" data-slot="popover-trigger" data-state="closed" id="menu-button" onclick="onMobileMenuButtonClick(event)" type="button">
+<div class="relative flex h-8 w-4 items-center justify-center">
+<div class="relative size-4">
+<!-- 16px x 16px -->
+<svg fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+<line class="group-data-[state=open]:translate-y-[2.25px] group-data-[state=open]:-translate-x-[2.25px] group-data-[state=open]:rotate-45 transition-all duration-300 origin-center" x1="0" x2="16" y1="5" y2="5"></line>
+<line class="group-data-[state=open]:-translate-y-[2.25px] group-data-[state=open]:-translate-x-[2.25px] group-data-[state=open]:-rotate-45 transition-all duration-300 origin-center" x1="0" x2="16" y1="11" y2="11"></line>
+</svg>
 </div>
-<div data-md-component="announce">
+<span class="sr-only">Toggle Menu</span>
 </div>
-<header class="md-header" data-md-component="header">
-<nav aria-label="Header" class="md-header__inner md-grid">
-<a aria-label="mitmania" class="md-header__button md-logo" data-md-component="logo" href="../.." title="mitmania">
-<svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
-</a>
-<label class="md-header__button md-icon" for="__drawer">
-<svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"></path></svg>
-</label>
-<div class="md-header__title" data-md-component="header-title">
-<div class="md-header__ellipsis">
-<div class="md-header__topic">
-<span class="md-ellipsis">
-            mitmania
-          </span>
-</div>
-<div class="md-header__topic" data-md-component="header-topic">
-<span class="md-ellipsis">
-            
-              Request pipeline
-            
-          </span>
-</div>
-</div>
-</div>
-<form class="md-header__option" data-md-component="palette">
-<input aria-label="Switch to dark mode" class="md-option" data-md-color-accent="indigo" data-md-color-media="(prefers-color-scheme: light)" data-md-color-primary="indigo" data-md-color-scheme="default" id="__palette_0" name="__palette" type="radio"/>
-<label class="md-header__button md-icon" for="__palette_1" hidden="" title="Switch to dark mode">
-<svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"></path></svg>
-</label>
-<input aria-label="Switch to light mode" class="md-option" data-md-color-accent="indigo" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-primary="indigo" data-md-color-scheme="slate" id="__palette_1" name="__palette" type="radio"/>
-<label class="md-header__button md-icon" for="__palette_0" hidden="" title="Switch to light mode">
-<svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"></path></svg>
-</label>
-</form>
-<script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
-<label class="md-header__button md-icon" for="__search">
-<svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
-</label>
-<div class="md-search" data-md-component="search" role="dialog">
-<label class="md-search__overlay" for="__search"></label>
-<div class="md-search__inner" role="search">
-<form class="md-search__form" name="search">
-<input aria-label="Search" autocapitalize="off" autocomplete="off" autocorrect="off" class="md-search__input" data-md-component="search-query" name="query" placeholder="Search" required="" spellcheck="false" type="text"/>
-<label class="md-search__icon md-icon" for="__search">
-<svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
-<svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"></path></svg>
-</label>
-<nav aria-label="Search" class="md-search__options">
-<button aria-label="Clear" class="md-search__icon md-icon" tabindex="-1" title="Clear" type="reset">
-<svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>
+<span class="flex h-8 items-center text-lg leading-none font-medium">Menu</span>
 </button>
-</nav>
-</form>
-<div class="md-search__output">
-<div class="md-search__scrollwrap" data-md-scrollfix="" tabindex="0">
-<div class="md-search-result" data-md-component="search-result">
-<div class="md-search-result__meta">
-            Initializing search
-          </div>
-<ol class="md-search-result__list" role="presentation"></ol>
+<a class="items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:pointer-events-none [&amp;_svg:not([class*='size-'])]:size-5 shrink-0 [&amp;_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 hidden h-8 lg:flex" data-slot="button" href="https://docs.mitmania.com/latest">
+<span class="size-8 flex flex-row justify-center items-center">
+<svg class="size-5" viewbox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+<rect fill="none" height="256" width="256"></rect>
+<line fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="32" x1="208" x2="128" y1="128" y2="208"></line>
+<line fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="32" x1="192" x2="40" y1="40" y2="192"></line>
+</svg>
+</span>
+<h1 class="pr-2">mitmania</h1>
+</a>
+<div class="ml-auto flex items-center gap-2 md:flex-1 md:justify-end">
+<div class="hidden w-full flex-1 md:flex md:w-auto md:flex-none">
+<div class="hidden w-full flex-1 md:flex md:w-auto md:flex-none">
+<button aria-controls="radix-_r_1_" aria-expanded="false" aria-haspopup="dialog" class="inline-flex shrink-0 items-center gap-2 text-sm whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&amp;_svg]:pointer-events-none [&amp;_svg]:shrink-0 [&amp;_svg:not([class*='size-'])]:size-4 border bg-background hover:text-accent-foreground dark:border-input dark:hover:bg-input/50 px-4 py-2 has-[&gt;svg]:px-3 relative h-8 w-full justify-start rounded-lg pl-3 font-normal text-foreground shadow-none hover:bg-muted/50 sm:pr-12 md:w-48 lg:w-56 xl:w-64 dark:bg-card" data-size="default" data-slot="dialog-trigger" data-state="closed" data-variant="outline" onclick="onSearchBarClick(event)" type="button">
+<span class="hidden lg:inline-flex">Search documentation...</span>
+<span class="inline-flex lg:hidden">Search...</span>
+</button>
+</div>
+<dialog class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-background rounded-lg shadow-lg border overflow-hidden p-0" id="search-dialog" onclick="onSearchDialogClick(event)">
+<div class="w-lg gap-4">
+<div class="flex h-full w-full flex-col overflow-hidden rounded-md bg-popover text-popover-foreground">
+<div class="flex h-9 items-center gap-2 border-b px-3" data-slot="command-input-wrapper"><svg class="lucide lucide-search size-4 shrink-0 opacity-50" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<circle cx="11" cy="11" r="8"></circle>
+<path d="m21 21-4.3-4.3"></path>
+</svg>
+<input aria-activedescendant="radix-«r1th»" aria-autocomplete="list" aria-controls="radix-«r1t6»" aria-expanded="true" aria-labelledby="radix-«r1t7»" autocomplete="off" autocorrect="off" class="placeholder:text-muted-foreground flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50" cmdk-input="" data-slot="command-input" id="radix-«r1t8»" oninput="onInputHandler(event)" placeholder="Search documentation..." role="combobox" spellcheck="false" type="text" value=""/>
+</div>
+</div>
+<div id="properdocs-search-results">
+<!-- search results go there -->
+</div>
+</div>
+</dialog>
+<script>
+    document.removeEventListener("keydown", searchShortcutHandler);
+    document.addEventListener("keydown", searchShortcutHandler);
+</script>
+</div>
+<div class="bg-border shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px 3xl:flex hidden" data-orientation="vertical" data-slot="separator" role="none">
+</div>
+<select id="version-selector" onchange="selectVersion(event.target.value)"></select>
+<script integrity="sha384-YU6TPf0CfFfbisdIHfkqTtPxu1sZc0K/F0h3GhS/UPVULZs1DqhjPpInpkcpR9rk" src="../../js/version-select.js"></script>
+<div class="bg-border shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px 3xl:flex hidden" data-orientation="vertical" data-slot="separator" role="none">
+</div>
+<button class="items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:pointer-events-none [&amp;_svg:not([class*='size-'])]:size-4 shrink-0 [&amp;_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 size-8 3xl:flex hidden" data-slot="button" onclick="toggleLayout(event)" title="Toggle layout">
+<span class="sr-only">Toggle layout</span>
+<svg class="lucide lucide-gallery-horizontal" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M2 3v18"></path>
+<rect height="18" rx="2" width="12" x="6" y="3"></rect>
+<path d="M22 3v18"></path>
+</svg>
+</button>
+<div class="bg-border shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px" data-orientation="vertical" data-slot="separator" role="none">
+</div>
+<button class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:pointer-events-none [&amp;_svg:not([class*='size-'])]:size-4 shrink-0 [&amp;_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 group/toggle extend-touch-target size-8" data-slot="button" onclick="onThemeSwitch(event)" title="Toggle theme">
+<svg class="size-4.5" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M0 0h24v24H0z" fill="none" stroke="none"></path>
+<path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"></path>
+<path d="M12 3l0 18"></path>
+<path d="M12 9l4.65 -4.65"></path>
+<path d="M12 14.3l7.37 -7.37"></path>
+<path d="M12 19.6l8.85 -8.85"></path>
+</svg>
+<span class="sr-only">Toggle theme</span>
+</button>
 </div>
 </div>
 </div>
-</div>
-</div>
-</nav>
 </header>
-<div class="md-container" data-md-component="container">
-<nav aria-label="Tabs" class="md-tabs" data-md-component="tabs">
-<div class="md-grid">
-<ul class="md-tabs__list">
-<li class="md-tabs__item">
-<a class="md-tabs__link" href="../..">
+<main class="flex flex-1 flex-col">
+<div class="container-wrapper flex flex-1 flex-col px-2">
+<div class="group/sidebar-wrapper has-data-[variant=inset]:bg-sidebar flex w-full 3xl:fixed:container 3xl:fixed:px-3 min-h-min flex-1 items-start px-0 [--sidebar-width:220px] [--top-spacing:0] lg:grid lg:grid-cols-[var(--sidebar-width)_minmax(0,1fr)] lg:[--sidebar-width:240px] lg:[--top-spacing:calc(var(--spacing)*4)]" data-slot="sidebar-wrapper" style="--sidebar-width:calc(var(--spacing) * 72);--sidebar-width-icon:3rem;">
+<div class="w-(--sidebar-width) flex-col text-sidebar-foreground sticky top-[calc(var(--header-height)+0.6rem)] z-30 hidden h-[calc(100svh-10rem)] overscroll-none bg-transparent [--sidebar-menu-width:--spacing(56)] lg:flex" data-slot="sidebar">
+<div class="h-9"></div>
+<div class="absolute top-8 z-10 h-8 w-(--sidebar-menu-width) shrink-0 bg-gradient-to-b from-background via-background/80 to-background/50 blur-xs">
+</div>
+<div class="absolute top-12 right-2 bottom-0 hidden h-full w-px bg-gradient-to-b from-transparent via-border to-transparent lg:flex">
+</div>
+<div class="flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-hidden mx-auto no-scrollbar w-(--sidebar-menu-width) overflow-x-hidden px-2" data-sidebar="content" data-slot="sidebar-content" view-transition-name="sidebar">
+<div class="relative flex w-full min-w-0 flex-col p-2 pt-6" data-sidebar="group" data-slot="sidebar-group">
+<div class="w-full text-sm" data-sidebar="group-content" data-slot="sidebar-group-content">
+<ul class="flex w-full min-w-0 flex-col gap-0.5" data-sidebar="menu" data-slot="sidebar-menu">
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../..">
+
         
-  
-  
-    
-  
-  Home
-
-      </a>
-</li>
-<li class="md-tabs__item md-tabs__item--active">
-<a class="md-tabs__link" href="../overview/">
-          
-  
-  
-  Concepts
-
-        </a>
-</li>
-<li class="md-tabs__item">
-<a class="md-tabs__link" href="../../start/install/">
-          
-  
-  
-  Get started
-
-        </a>
-</li>
-<li class="md-tabs__item">
-<a class="md-tabs__link" href="../../usecases/">
-          
-  
-  
-  Use cases
-
-        </a>
-</li>
-<li class="md-tabs__item">
-<a class="md-tabs__link" href="../../tutorials/egress-docker/">
-          
-  
-  
-  Tutorials
-
-        </a>
-</li>
-<li class="md-tabs__item">
-<a class="md-tabs__link" href="../../config/cli/">
-          
-  
-  
-  Configuration
-
-        </a>
-</li>
-<li class="md-tabs__item">
-<a class="md-tabs__link" href="../../ops/topologies/">
-          
-  
-  
-  Operations
-
-        </a>
-</li>
-<li class="md-tabs__item">
-<a class="md-tabs__link" href="../../security/threat-model/">
-          
-  
-  
-  Security
-
-        </a>
-</li>
-<li class="md-tabs__item">
-<a class="md-tabs__link" href="../../reference/rule-schema/">
-          
-  
-  
-  Reference
-
-        </a>
-</li>
-<li class="md-tabs__item">
-<a class="md-tabs__link" href="../../faq/">
+        Home
         
-  
-  
-    
-  
-  FAQ &amp; troubleshooting
 
-      </a>
+        
+
+        
+
+        
+    </a>
+</li>
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../faq/">
+
+        
+        FAQ &amp; troubleshooting
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
 </ul>
 </div>
-</nav>
-<main class="md-main" data-md-component="main">
-<div class="md-main__inner md-grid">
-<div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
-<div class="md-sidebar__scrollwrap">
-<div class="md-sidebar__inner">
-<nav aria-label="Navigation" class="md-nav md-nav--primary md-nav--lifted" data-md-level="0">
-<label class="md-nav__title" for="__drawer">
-<a aria-label="mitmania" class="md-nav__button md-logo" data-md-component="logo" href="../.." title="mitmania">
-<svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"></path></svg>
-</a>
-    mitmania
-  </label>
-<ul class="md-nav__list" data-md-scrollfix="">
-<li class="md-nav__item">
-<a class="md-nav__link" href="../..">
-<span class="md-ellipsis">
-    
-  
-    Home
-  
+</div>
+<div class="relative flex w-full min-w-0 flex-col p-2" data-sidebar="group" data-slot="sidebar-group">
+<div class="flex h-8 shrink-0 items-center rounded-md px-2 text-xs ring-sidebar-ring outline-hidden transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 font-medium text-muted-foreground" data-sidebar="group-label" data-slot="sidebar-group-label">
+        Concepts</div>
+<div class="w-full text-sm" data-sidebar="group-content" data-slot="sidebar-group-content">
+<ul class="flex w-full min-w-0 flex-col gap-0.5" data-sidebar="menu" data-slot="sidebar-menu">
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../overview/">
 
-    
-  </span>
-</a>
+        
+        What mitmania is
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-<input checked="" class="md-nav__toggle md-toggle" id="__nav_2" type="checkbox"/>
-<label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
-<span class="md-ellipsis">
-    
-  
-    Concepts
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../control-plane/">
 
-    
-  </span>
-<span class="md-nav__icon md-icon"></span>
-</label>
-<nav aria-expanded="true" aria-labelledby="__nav_2_label" class="md-nav" data-md-level="1">
-<label class="md-nav__title" for="__nav_2">
-<span class="md-nav__icon md-icon"></span>
-            
-  
-    Concepts
-  
+        
+        Control plane vs. data plane
+        
 
-          </label>
-<ul class="md-nav__list" data-md-scrollfix="">
-<li class="md-nav__item">
-<a class="md-nav__link" href="../overview/">
-<span class="md-ellipsis">
-    
-  
-    What mitmania is
-  
+        
 
-    
-  </span>
-</a>
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../control-plane/">
-<span class="md-ellipsis">
-    
-  
-    Control plane vs. data plane
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="true" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="./">
 
-    
-  </span>
-</a>
+        
+        Request pipeline
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item md-nav__item--active">
-<input class="md-nav__toggle md-toggle" id="__toc" type="checkbox"/>
-<a class="md-nav__link md-nav__link--active" href="./">
-<span class="md-ellipsis">
-    
-  
-    Request pipeline
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../certificates/">
 
-    
-  </span>
-</a>
+        
+        Interception &amp; certificates
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../certificates/">
-<span class="md-ellipsis">
-    
-  
-    Interception &amp; certificates
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../identity-rules/">
 
-    
-  </span>
-</a>
+        
+        Identity, rules &amp; phases
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../identity-rules/">
-<span class="md-ellipsis">
-    
-  
-    Identity, rules &amp; phases
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../distributed/">
 
-    
-  </span>
-</a>
+        
+        Distributed operation
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../distributed/">
-<span class="md-ellipsis">
-    
-  
-    Distributed operation
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../storage/">
 
-    
-  </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../storage/">
-<span class="md-ellipsis">
-    
-  
-    State &amp; storage
-  
+        
+        State &amp; storage
+        
 
-    
-  </span>
-</a>
+        
+
+        
+
+        
+    </a>
 </li>
 </ul>
-</nav>
+</div>
+</div>
+<div class="relative flex w-full min-w-0 flex-col p-2" data-sidebar="group" data-slot="sidebar-group">
+<div class="flex h-8 shrink-0 items-center rounded-md px-2 text-xs ring-sidebar-ring outline-hidden transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 font-medium text-muted-foreground" data-sidebar="group-label" data-slot="sidebar-group-label">
+        Get started</div>
+<div class="w-full text-sm" data-sidebar="group-content" data-slot="sidebar-group-content">
+<ul class="flex w-full min-w-0 flex-col gap-0.5" data-sidebar="menu" data-slot="sidebar-menu">
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../start/install/">
+
+        
+        Install
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item md-nav__item--nested">
-<input class="md-nav__toggle md-toggle" id="__nav_3" type="checkbox"/>
-<label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
-<span class="md-ellipsis">
-    
-  
-    Get started
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../start/first-run/">
 
-    
-  </span>
-<span class="md-nav__icon md-icon"></span>
-</label>
-<nav aria-expanded="false" aria-labelledby="__nav_3_label" class="md-nav" data-md-level="1">
-<label class="md-nav__title" for="__nav_3">
-<span class="md-nav__icon md-icon"></span>
-            
-  
-    Get started
-  
+        
+        First run (single node)
+        
 
-          </label>
-<ul class="md-nav__list" data-md-scrollfix="">
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../start/install/">
-<span class="md-ellipsis">
-    
-  
-    Install
-  
+        
 
-    
-  </span>
-</a>
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../start/first-run/">
-<span class="md-ellipsis">
-    
-  
-    First run (single node)
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../start/trust-ca/">
 
-    
-  </span>
-</a>
+        
+        Trust the CA
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../start/trust-ca/">
-<span class="md-ellipsis">
-    
-  
-    Trust the CA
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../start/point-client/">
 
-    
-  </span>
-</a>
+        
+        Point a client
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../start/point-client/">
-<span class="md-ellipsis">
-    
-  
-    Point a client
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../start/verify/">
 
-    
-  </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../start/verify/">
-<span class="md-ellipsis">
-    
-  
-    Verify it works
-  
+        
+        Verify it works
+        
 
-    
-  </span>
-</a>
+        
+
+        
+
+        
+    </a>
 </li>
 </ul>
-</nav>
+</div>
+</div>
+<div class="relative flex w-full min-w-0 flex-col p-2" data-sidebar="group" data-slot="sidebar-group">
+<div class="flex h-8 shrink-0 items-center rounded-md px-2 text-xs ring-sidebar-ring outline-hidden transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 font-medium text-muted-foreground" data-sidebar="group-label" data-slot="sidebar-group-label">
+        Use cases</div>
+<div class="w-full text-sm" data-sidebar="group-content" data-slot="sidebar-group-content">
+<ul class="flex w-full min-w-0 flex-col gap-0.5" data-sidebar="menu" data-slot="sidebar-menu">
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../usecases/">
+
+        
+        Overview
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item md-nav__item--nested">
-<input class="md-nav__toggle md-toggle" id="__nav_4" type="checkbox"/>
-<label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
-<span class="md-ellipsis">
-    
-  
-    Use cases
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../usecases/no-mitm/">
 
-    
-  </span>
-<span class="md-nav__icon md-icon"></span>
-</label>
-<nav aria-expanded="false" aria-labelledby="__nav_4_label" class="md-nav" data-md-level="1">
-<label class="md-nav__title" for="__nav_4">
-<span class="md-nav__icon md-icon"></span>
-            
-  
-    Use cases
-  
+        
+        Policy proxy without MITM
+        
 
-          </label>
-<ul class="md-nav__list" data-md-scrollfix="">
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../usecases/">
-<span class="md-ellipsis">
-    
-  
-    Overview
-  
+        
 
-    
-  </span>
-</a>
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../usecases/no-mitm/">
-<span class="md-ellipsis">
-    
-  
-    Policy proxy without MITM
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../usecases/egress/">
 
-    
-  </span>
-</a>
+        
+        Egress firewall &amp; SSRF guard
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../usecases/egress/">
-<span class="md-ellipsis">
-    
-  
-    Egress firewall &amp; SSRF guard
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../usecases/auth-proxy/">
 
-    
-  </span>
-</a>
+        
+        Authenticating forward proxy
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../usecases/auth-proxy/">
-<span class="md-ellipsis">
-    
-  
-    Authenticating forward proxy
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../usecases/injection/">
 
-    
-  </span>
-</a>
+        
+        Header &amp; credential injection
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../usecases/injection/">
-<span class="md-ellipsis">
-    
-  
-    Header &amp; credential injection
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../usecases/mutation/">
 
-    
-  </span>
-</a>
+        
+        Block, rewrite, redact
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../usecases/mutation/">
-<span class="md-ellipsis">
-    
-  
-    Block, rewrite, redact
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../usecases/containment/">
 
-    
-  </span>
-</a>
+        
+        Agent / sandbox containment
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../usecases/containment/">
-<span class="md-ellipsis">
-    
-  
-    Agent / sandbox containment
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../usecases/transparent/">
 
-    
-  </span>
-</a>
+        
+        Transparent interception (TPROXY/REDIRECT)
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../usecases/transparent/">
-<span class="md-ellipsis">
-    
-  
-    Transparent interception (TPROXY/REDIRECT)
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../usecases/broker/">
 
-    
-  </span>
-</a>
+        
+        Central policy via broker
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../usecases/broker/">
-<span class="md-ellipsis">
-    
-  
-    Central policy via broker
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../usecases/debugging/">
 
-    
-  </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../usecases/debugging/">
-<span class="md-ellipsis">
-    
-  
-    Debugging &amp; inspecting TLS
-  
+        
+        Debugging &amp; inspecting TLS
+        
 
-    
-  </span>
-</a>
-</li>
-</ul>
-</nav>
-</li>
-<li class="md-nav__item md-nav__item--nested">
-<input class="md-nav__toggle md-toggle" id="__nav_5" type="checkbox"/>
-<label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
-<span class="md-ellipsis">
-    
-  
-    Tutorials
-  
+        
 
-    
-  </span>
-<span class="md-nav__icon md-icon"></span>
-</label>
-<nav aria-expanded="false" aria-labelledby="__nav_5_label" class="md-nav" data-md-level="1">
-<label class="md-nav__title" for="__nav_5">
-<span class="md-nav__icon md-icon"></span>
-            
-  
-    Tutorials
-  
+        
 
-          </label>
-<ul class="md-nav__list" data-md-scrollfix="">
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../tutorials/egress-docker/">
-<span class="md-ellipsis">
-    
-  
-    Egress allowlist for Docker (no MITM)
-  
-
-    
-  </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../tutorials/transparent-nft/">
-<span class="md-ellipsis">
-    
-  
-    Transparent interception with nftables
-  
-
-    
-  </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../tutorials/broker-token/">
-<span class="md-ellipsis">
-    
-  
-    Inject an API token via a broker
-  
-
-    
-  </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../tutorials/proxy-auth-identity/">
-<span class="md-ellipsis">
-    
-  
-    Per-client rules with proxy-auth identity
-  
-
-    
-  </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../tutorials/cluster-s3/">
-<span class="md-ellipsis">
-    
-  
-    Run a cluster on S3
-  
-
-    
-  </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../tutorials/byo-ca/">
-<span class="md-ellipsis">
-    
-  
-    Bring your own CA
-  
-
-    
-  </span>
-</a>
+        
+    </a>
 </li>
 </ul>
-</nav>
+</div>
+</div>
+<div class="relative flex w-full min-w-0 flex-col p-2" data-sidebar="group" data-slot="sidebar-group">
+<div class="flex h-8 shrink-0 items-center rounded-md px-2 text-xs ring-sidebar-ring outline-hidden transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 font-medium text-muted-foreground" data-sidebar="group-label" data-slot="sidebar-group-label">
+        Tutorials</div>
+<div class="w-full text-sm" data-sidebar="group-content" data-slot="sidebar-group-content">
+<ul class="flex w-full min-w-0 flex-col gap-0.5" data-sidebar="menu" data-slot="sidebar-menu">
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../tutorials/egress-docker/">
+
+        
+        Egress allowlist for Docker (no MITM)
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item md-nav__item--nested">
-<input class="md-nav__toggle md-toggle" id="__nav_6" type="checkbox"/>
-<label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
-<span class="md-ellipsis">
-    
-  
-    Configuration
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../tutorials/transparent-nft/">
 
-    
-  </span>
-<span class="md-nav__icon md-icon"></span>
-</label>
-<nav aria-expanded="false" aria-labelledby="__nav_6_label" class="md-nav" data-md-level="1">
-<label class="md-nav__title" for="__nav_6">
-<span class="md-nav__icon md-icon"></span>
-            
-  
-    Configuration
-  
+        
+        Transparent interception with nftables
+        
 
-          </label>
-<ul class="md-nav__list" data-md-scrollfix="">
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../config/cli/">
-<span class="md-ellipsis">
-    
-  
-    CLI &amp; flags
-  
+        
 
-    
-  </span>
-</a>
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../config/rules/">
-<span class="md-ellipsis">
-    
-  
-    Rule files
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../tutorials/broker-token/">
 
-    
-  </span>
-</a>
+        
+        Inject an API token via a broker
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../config/actions/">
-<span class="md-ellipsis">
-    
-  
-    Matching &amp; actions
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../tutorials/proxy-auth-identity/">
 
-    
-  </span>
-</a>
+        
+        Per-client rules with proxy-auth identity
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../config/egress/">
-<span class="md-ellipsis">
-    
-  
-    Egress policy
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../tutorials/cluster-s3/">
 
-    
-  </span>
-</a>
+        
+        Run a cluster on S3
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../config/auth/">
-<span class="md-ellipsis">
-    
-  
-    Client authentication
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../tutorials/byo-ca/">
 
-    
-  </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../config/outcalls/">
-<span class="md-ellipsis">
-    
-  
-    Outcalls (brokers)
-  
+        
+        Bring your own CA
+        
 
-    
-  </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../config/errors/">
-<span class="md-ellipsis">
-    
-  
-    Error pages &amp; status codes
-  
+        
 
-    
-  </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../config/observability/">
-<span class="md-ellipsis">
-    
-  
-    Telemetry &amp; logging
-  
+        
 
-    
-  </span>
-</a>
+        
+    </a>
 </li>
 </ul>
-</nav>
+</div>
+</div>
+<div class="relative flex w-full min-w-0 flex-col p-2" data-sidebar="group" data-slot="sidebar-group">
+<div class="flex h-8 shrink-0 items-center rounded-md px-2 text-xs ring-sidebar-ring outline-hidden transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 font-medium text-muted-foreground" data-sidebar="group-label" data-slot="sidebar-group-label">
+        Configuration</div>
+<div class="w-full text-sm" data-sidebar="group-content" data-slot="sidebar-group-content">
+<ul class="flex w-full min-w-0 flex-col gap-0.5" data-sidebar="menu" data-slot="sidebar-menu">
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../config/cli/">
+
+        
+        CLI &amp; flags
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item md-nav__item--nested">
-<input class="md-nav__toggle md-toggle" id="__nav_7" type="checkbox"/>
-<label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
-<span class="md-ellipsis">
-    
-  
-    Operations
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../config/rules/">
 
-    
-  </span>
-<span class="md-nav__icon md-icon"></span>
-</label>
-<nav aria-expanded="false" aria-labelledby="__nav_7_label" class="md-nav" data-md-level="1">
-<label class="md-nav__title" for="__nav_7">
-<span class="md-nav__icon md-icon"></span>
-            
-  
-    Operations
-  
+        
+        Rule files
+        
 
-          </label>
-<ul class="md-nav__list" data-md-scrollfix="">
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../ops/topologies/">
-<span class="md-ellipsis">
-    
-  
-    Deployment topologies
-  
+        
 
-    
-  </span>
-</a>
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../ops/lb-identity/">
-<span class="md-ellipsis">
-    
-  
-    Load balancing &amp; client identity
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../config/default-ruleset/">
 
-    
-  </span>
-</a>
+        
+        The default rule table
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../ops/storage/">
-<span class="md-ellipsis">
-    
-  
-    Storage backends (posix/S3)
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../config/actions/">
 
-    
-  </span>
-</a>
+        
+        Matching &amp; actions
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../ops/ca/">
-<span class="md-ellipsis">
-    
-  
-    CA &amp; certificate management
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../config/egress/">
 
-    
-  </span>
-</a>
+        
+        Egress policy
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../ops/upgrades/">
-<span class="md-ellipsis">
-    
-  
-    Upgrades &amp; consistency
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../config/auth/">
 
-    
-  </span>
-</a>
+        
+        Client authentication
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../ops/monitoring/">
-<span class="md-ellipsis">
-    
-  
-    Monitoring &amp; dashboards
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../config/outcalls/">
 
-    
-  </span>
-</a>
+        
+        Outcalls (brokers)
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../ops/capacity/">
-<span class="md-ellipsis">
-    
-  
-    Capacity &amp; sizing
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../config/errors/">
 
-    
-  </span>
-</a>
+        
+        Error pages &amp; status codes
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../ops/runbooks/">
-<span class="md-ellipsis">
-    
-  
-    Runbooks
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../config/observability/">
 
-    
-  </span>
-</a>
-</li>
-</ul>
-</nav>
-</li>
-<li class="md-nav__item md-nav__item--nested">
-<input class="md-nav__toggle md-toggle" id="__nav_8" type="checkbox"/>
-<label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
-<span class="md-ellipsis">
-    
-  
-    Security
-  
+        
+        Telemetry &amp; logging
+        
 
-    
-  </span>
-<span class="md-nav__icon md-icon"></span>
-</label>
-<nav aria-expanded="false" aria-labelledby="__nav_8_label" class="md-nav" data-md-level="1">
-<label class="md-nav__title" for="__nav_8">
-<span class="md-nav__icon md-icon"></span>
-            
-  
-    Security
-  
+        
 
-          </label>
-<ul class="md-nav__list" data-md-scrollfix="">
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../security/threat-model/">
-<span class="md-ellipsis">
-    
-  
-    Threat model (containment)
-  
+        
 
-    
-  </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../security/secrets/">
-<span class="md-ellipsis">
-    
-  
-    Secrets at rest
-  
-
-    
-  </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../security/invariants/">
-<span class="md-ellipsis">
-    
-  
-    Deployment invariants
-  
-
-    
-  </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../security/hardening/">
-<span class="md-ellipsis">
-    
-  
-    Hardening checklist
-  
-
-    
-  </span>
-</a>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../security/secret-ops/">
-<span class="md-ellipsis">
-    
-  
-    Secret rotation &amp; recovery
-  
-
-    
-  </span>
-</a>
+        
+    </a>
 </li>
 </ul>
-</nav>
+</div>
+</div>
+<div class="relative flex w-full min-w-0 flex-col p-2" data-sidebar="group" data-slot="sidebar-group">
+<div class="flex h-8 shrink-0 items-center rounded-md px-2 text-xs ring-sidebar-ring outline-hidden transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 font-medium text-muted-foreground" data-sidebar="group-label" data-slot="sidebar-group-label">
+        Operations</div>
+<div class="w-full text-sm" data-sidebar="group-content" data-slot="sidebar-group-content">
+<ul class="flex w-full min-w-0 flex-col gap-0.5" data-sidebar="menu" data-slot="sidebar-menu">
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../ops/topologies/">
+
+        
+        Deployment topologies
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item md-nav__item--nested">
-<input class="md-nav__toggle md-toggle" id="__nav_9" type="checkbox"/>
-<label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
-<span class="md-ellipsis">
-    
-  
-    Reference
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../ops/lb-identity/">
 
-    
-  </span>
-<span class="md-nav__icon md-icon"></span>
-</label>
-<nav aria-expanded="false" aria-labelledby="__nav_9_label" class="md-nav" data-md-level="1">
-<label class="md-nav__title" for="__nav_9">
-<span class="md-nav__icon md-icon"></span>
-            
-  
-    Reference
-  
+        
+        Load balancing &amp; client identity
+        
 
-          </label>
-<ul class="md-nav__list" data-md-scrollfix="">
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../reference/rule-schema/">
-<span class="md-ellipsis">
-    
-  
-    Rule-file schema
-  
+        
 
-    
-  </span>
-</a>
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../reference/wire-format/">
-<span class="md-ellipsis">
-    
-  
-    Broker wire format
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../ops/storage/">
 
-    
-  </span>
-</a>
+        
+        Storage backends (posix/S3)
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../reference/metrics/">
-<span class="md-ellipsis">
-    
-  
-    Metrics catalog
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../ops/ca/">
 
-    
-  </span>
-</a>
+        
+        CA &amp; certificate management
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../reference/logs/">
-<span class="md-ellipsis">
-    
-  
-    Log fields
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../ops/upgrades/">
 
-    
-  </span>
-</a>
+        
+        Upgrades &amp; consistency
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../reference/glossary/">
-<span class="md-ellipsis">
-    
-  
-    Glossary
-  
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../ops/monitoring/">
 
-    
-  </span>
-</a>
+        
+        Monitoring &amp; dashboards
+        
+
+        
+
+        
+
+        
+    </a>
+</li>
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../ops/capacity/">
+
+        
+        Capacity &amp; sizing
+        
+
+        
+
+        
+
+        
+    </a>
+</li>
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../ops/runbooks/">
+
+        
+        Runbooks
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
 </ul>
-</nav>
-</li>
-<li class="md-nav__item">
-<a class="md-nav__link" href="../../faq/">
-<span class="md-ellipsis">
-    
-  
-    FAQ &amp; troubleshooting
-  
+</div>
+</div>
+<div class="relative flex w-full min-w-0 flex-col p-2" data-sidebar="group" data-slot="sidebar-group">
+<div class="flex h-8 shrink-0 items-center rounded-md px-2 text-xs ring-sidebar-ring outline-hidden transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 font-medium text-muted-foreground" data-sidebar="group-label" data-slot="sidebar-group-label">
+        Security</div>
+<div class="w-full text-sm" data-sidebar="group-content" data-slot="sidebar-group-content">
+<ul class="flex w-full min-w-0 flex-col gap-0.5" data-sidebar="menu" data-slot="sidebar-menu">
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../security/threat-model/">
 
-    
-  </span>
-</a>
+        
+        Threat model (containment)
+        
+
+        
+
+        
+
+        
+    </a>
+</li>
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../security/secrets/">
+
+        
+        Secrets at rest
+        
+
+        
+
+        
+
+        
+    </a>
+</li>
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../security/invariants/">
+
+        
+        Deployment invariants
+        
+
+        
+
+        
+
+        
+    </a>
+</li>
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../security/hardening/">
+
+        
+        Hardening checklist
+        
+
+        
+
+        
+
+        
+    </a>
+</li>
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../security/secret-ops/">
+
+        
+        Secret rotation &amp; recovery
+        
+
+        
+
+        
+
+        
+    </a>
 </li>
 </ul>
-</nav>
+</div>
+</div>
+<div class="relative flex w-full min-w-0 flex-col p-2" data-sidebar="group" data-slot="sidebar-group">
+<div class="flex h-8 shrink-0 items-center rounded-md px-2 text-xs ring-sidebar-ring outline-hidden transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 font-medium text-muted-foreground" data-sidebar="group-label" data-slot="sidebar-group-label">
+        Reference</div>
+<div class="w-full text-sm" data-sidebar="group-content" data-slot="sidebar-group-content">
+<ul class="flex w-full min-w-0 flex-col gap-0.5" data-sidebar="menu" data-slot="sidebar-menu">
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../reference/rule-schema/">
+
+        
+        Rule-file schema
+        
+
+        
+
+        
+
+        
+    </a>
+</li>
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../reference/wire-format/">
+
+        
+        Broker wire format
+        
+
+        
+
+        
+
+        
+    </a>
+</li>
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../reference/metrics/">
+
+        
+        Metrics catalog
+        
+
+        
+
+        
+
+        
+    </a>
+</li>
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../reference/logs/">
+
+        
+        Log fields
+        
+
+        
+
+        
+
+        
+    </a>
+</li>
+<li class="group/menu-item relative" data-sidebar="menu-item" data-slot="sidebar-menu-item">
+<a class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&amp;&gt;span:last-child]:truncate [&amp;&gt;svg]:size-4 [&amp;&gt;svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48" data-active="false" data-sidebar="menu-button" data-size="default" data-slot="sidebar-menu-button" href="../../reference/glossary/">
+
+        
+        Glossary
+        
+
+        
+
+        
+
+        
+    </a>
+</li>
+</ul>
+</div>
+</div>
+<div class="sticky -bottom-1 z-10 h-16 shrink-0 bg-gradient-to-t from-background via-background/80 to-background/50 blur-xs">
 </div>
 </div>
 </div>
-<div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
-<div class="md-sidebar__scrollwrap">
-<div class="md-sidebar__inner">
-<nav aria-label="Table of contents" class="md-nav md-nav--secondary">
-</nav>
+<div class="h-full w-full">
+<div class="flex items-stretch text-[1.05rem] sm:text-[15px] xl:w-full" data-slot="docs">
+<div class="flex min-w-0 flex-1 flex-col">
+<div class="h-(--top-spacing) shrink-0"></div>
+<article class="w-full" view-transition-name="page">
+<div class="flex flex-col gap-2">
+<div class="flex flex-col gap-2">
+<div class="flex items-start justify-between" id="page-header">
+<h1 class="scroll-m-20 text-4xl font-semibold tracking-tight sm:text-3xl xl:text-4xl">
+          Request pipeline
+        </h1>
+<div class="flex items-center gap-2 pt-1.5">
+<button class="secondary cursor-pointer" data-slot="button" onclick="fetch(`../..`).then((r) =&gt; r.text()).then((text) =&gt; navigator.clipboard.write([new ClipboardItem({ 'text/plain': text })]))">
+<svg class="tabler-icon tabler-icon-copy" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M7 7m0 2.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667z">
+</path>
+<path d="M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1"></path>
+</svg>
+<span class="max-md:hidden">Copy Page</span>
+</button>
+<a class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:pointer-events-none [&amp;_svg:not([class*='size-'])]:size-4 shrink-0 [&amp;_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-secondary text-secondary-foreground hover:bg-secondary/80 extend-touch-target size-8 shadow-none md:size-7" data-slot="button" href="../control-plane/" id="previous-button">
+<svg class="tabler-icon tabler-icon-arrow-left" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M5 12l14 0"></path>
+<path d="M5 12l6 6"></path>
+<path d="M5 12l6 -6"></path>
+</svg>
+<span class="sr-only">Previous</span>
+</a>
+<a class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:pointer-events-none [&amp;_svg:not([class*='size-'])]:size-4 shrink-0 [&amp;_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-secondary text-secondary-foreground hover:bg-secondary/80 extend-touch-target size-8 shadow-none md:size-7" data-slot="button" href="../certificates/" id="next-button">
+<span class="sr-only">Next</span>
+<svg class="tabler-icon tabler-icon-arrow-right" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M5 12l14 0"></path>
+<path d="M13 18l6 -6"></path>
+<path d="M13 6l6 6"></path>
+</svg>
+</a>
 </div>
 </div>
 </div>
-<div class="md-content" data-md-component="content">
-<article class="md-content__inner md-typeset">
-<h1 id="request-pipeline">Request pipeline<a class="headerlink" href="#request-pipeline" title="Permanent link">¶</a></h1>
+<div class="flex justify-end items-center">
+</div>
+</div>
+<div class="typography w-full flex-1 *:data-[slot=alert]:first:mt-0">
 <p>Each connection passes through two independent policy questions: does a connection-phase rule authorize this authority, and does egress policy authorize every resolved address? Only intercepted traffic proceeds to message-phase rules.</p>
-<pre class="mermaid"><code>flowchart TD
+<div class="mermaid">flowchart TD
     A[Accept session] --&gt; I[Resolve proxied client identity]
     I --&gt; AU{Proxy auth required?}
     AU --&gt;|invalid| X407[407]
@@ -1123,35 +1071,417 @@
     T --&gt; Q[Message-phase first match]
     Q --&gt; P[Run one request pipeline]
     P --&gt; O[Forward and stream response]
-    O --&gt; RP[Run response actions]</code></pre>
+    O --&gt; RP[Run response actions]
+</div>
 <p>The same ordered <code>http[]</code> list is scanned twice. The connection pass sees only <code>host</code>, <code>port</code>, and <code>proto</code> and decides whether to intercept. After interception, the message pass can also see <code>path</code>, <code>method</code>, and headers and runs exactly one rule's action pipeline.</p>
 <p>Rules are first-match, not cumulative. A broad rule placed first can make every narrower rule dead. Egress is a separate first-match list over pinned destination IPs; both lists must allow the connection.</p>
 <p>See <a href="../../config/actions/">Matching and actions</a> for field semantics and <a href="../../config/errors/">Error pages</a> for rejection delivery.</p>
-</article>
 </div>
-<script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
-<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+<script>
+    document.querySelectorAll('article h2, article h3').forEach((header) => {
+      toc.observer.observe(header);
+    });
+  </script>
+</article>
+<div class="mx-auto flex flex-wrap h-16 w-full max-w-2xl items-center gap-2 px-4 md:px-0">
+<a class="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:pointer-events-none [&amp;_svg:not([class*='size-'])]:size-4 shrink-0 [&amp;_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-secondary text-secondary-foreground hover:bg-secondary/80 h-8 rounded-md gap-1.5 px-3 has-[&gt;svg]:px-2.5 shadow-none" data-slot="button" href="../control-plane/">
+<svg class="tabler-icon tabler-icon-arrow-left" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M5 12l14 0"></path>
+<path d="M5 12l6 6"></path>
+<path d="M5 12l6 -6"></path>
+</svg>
+<span class="max-[500px]:hidden">Control plane vs. data plane</span>
+</a>
+<a class="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:pointer-events-none [&amp;_svg:not([class*='size-'])]:size-4 shrink-0 [&amp;_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-secondary text-secondary-foreground hover:bg-secondary/80 h-8 rounded-md gap-1.5 px-3 has-[&gt;svg]:px-2.5 ml-auto shadow-none" data-slot="button" href="../certificates/">
+<span class="max-[500px]:hidden">Interception &amp; certificates</span>
+<svg class="tabler-icon tabler-icon-arrow-right" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<path d="M5 12l14 0"></path>
+<path d="M13 18l6 -6"></path>
+<path d="M13 6l6 6"></path>
+</svg>
+</a>
+</div>
+</div>
+<dialog class="bg-transparent" id="bottom-sidebar" onclick="onBottomSidebarDialogClick(event)" style="position: fixed; left: 0px; top: 0px; transform: translate(0px, 58px); min-width: max-content; --radix-popper-transform-origin: 0% 0px; will-change: transform; z-index: 50; --radix-popper-available-width: 504px; --radix-popper-available-height: 857px; --radix-popper-anchor-width: 72.94999694824219px; --radix-popper-anchor-height: 32px;">
+<div class="text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 origin-(--radix-popover-content-transform-origin) border outline-hidden bg-background/90 no-scrollbar h-(--radix-popper-available-height) w-(--radix-popper-available-width) overflow-y-auto rounded-none border-none p-0 shadow-none backdrop-blur duration-100" data-align="start" data-side="bottom" data-slot="popover-content" data-state="open" role="dialog" style="--radix-popover-content-transform-origin: var(--radix-popper-transform-origin); --radix-popover-content-available-width: var(--radix-popper-available-width); --radix-popover-content-available-height: var(--radix-popper-available-height); --radix-popover-trigger-width: var(--radix-popper-anchor-width); --radix-popover-trigger-height: var(--radix-popper-anchor-height);" tabindex="-1">
+<div class="flex flex-col gap-12 overflow-auto px-6 py-6">
+<div class="flex flex-col gap-4">
+<div class="text-muted-foreground text-sm font-medium">Menu</div>
+<div class="flex flex-col gap-3">
+<a class="text-2xl font-medium" href="../..">
+                        
+                        Home
+                        
+                    </a>
+<a class="text-2xl font-medium" href="../../faq/">
+                        
+                        FAQ &amp; troubleshooting
+                        
+                    </a>
+</div>
+</div>
+<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-4">
+<div class="text-muted-foreground text-sm font-medium">Concepts</div>
+<div class="flex flex-col gap-3">
+<a class="text-2xl font-medium" href="../overview/">
+                            
+                            What mitmania is
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../control-plane/">
+                            
+                            Control plane vs. data plane
+                            
+                        </a>
+<a class="text-2xl font-medium" href="./">
+                            
+                            Request pipeline
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../certificates/">
+                            
+                            Interception &amp; certificates
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../identity-rules/">
+                            
+                            Identity, rules &amp; phases
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../distributed/">
+                            
+                            Distributed operation
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../storage/">
+                            
+                            State &amp; storage
+                            
+                        </a>
+</div>
+</div>
+<div class="flex flex-col gap-4">
+<div class="text-muted-foreground text-sm font-medium">Get started</div>
+<div class="flex flex-col gap-3">
+<a class="text-2xl font-medium" href="../../start/install/">
+                            
+                            Install
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../start/first-run/">
+                            
+                            First run (single node)
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../start/trust-ca/">
+                            
+                            Trust the CA
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../start/point-client/">
+                            
+                            Point a client
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../start/verify/">
+                            
+                            Verify it works
+                            
+                        </a>
+</div>
+</div>
+<div class="flex flex-col gap-4">
+<div class="text-muted-foreground text-sm font-medium">Use cases</div>
+<div class="flex flex-col gap-3">
+<a class="text-2xl font-medium" href="../../usecases/">
+                            
+                            Overview
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../usecases/no-mitm/">
+                            
+                            Policy proxy without MITM
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../usecases/egress/">
+                            
+                            Egress firewall &amp; SSRF guard
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../usecases/auth-proxy/">
+                            
+                            Authenticating forward proxy
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../usecases/injection/">
+                            
+                            Header &amp; credential injection
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../usecases/mutation/">
+                            
+                            Block, rewrite, redact
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../usecases/containment/">
+                            
+                            Agent / sandbox containment
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../usecases/transparent/">
+                            
+                            Transparent interception (TPROXY/REDIRECT)
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../usecases/broker/">
+                            
+                            Central policy via broker
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../usecases/debugging/">
+                            
+                            Debugging &amp; inspecting TLS
+                            
+                        </a>
+</div>
+</div>
+<div class="flex flex-col gap-4">
+<div class="text-muted-foreground text-sm font-medium">Tutorials</div>
+<div class="flex flex-col gap-3">
+<a class="text-2xl font-medium" href="../../tutorials/egress-docker/">
+                            
+                            Egress allowlist for Docker (no MITM)
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../tutorials/transparent-nft/">
+                            
+                            Transparent interception with nftables
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../tutorials/broker-token/">
+                            
+                            Inject an API token via a broker
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../tutorials/proxy-auth-identity/">
+                            
+                            Per-client rules with proxy-auth identity
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../tutorials/cluster-s3/">
+                            
+                            Run a cluster on S3
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../tutorials/byo-ca/">
+                            
+                            Bring your own CA
+                            
+                        </a>
+</div>
+</div>
+<div class="flex flex-col gap-4">
+<div class="text-muted-foreground text-sm font-medium">Configuration</div>
+<div class="flex flex-col gap-3">
+<a class="text-2xl font-medium" href="../../config/cli/">
+                            
+                            CLI &amp; flags
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../config/rules/">
+                            
+                            Rule files
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../config/default-ruleset/">
+                            
+                            The default rule table
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../config/actions/">
+                            
+                            Matching &amp; actions
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../config/egress/">
+                            
+                            Egress policy
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../config/auth/">
+                            
+                            Client authentication
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../config/outcalls/">
+                            
+                            Outcalls (brokers)
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../config/errors/">
+                            
+                            Error pages &amp; status codes
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../config/observability/">
+                            
+                            Telemetry &amp; logging
+                            
+                        </a>
+</div>
+</div>
+<div class="flex flex-col gap-4">
+<div class="text-muted-foreground text-sm font-medium">Operations</div>
+<div class="flex flex-col gap-3">
+<a class="text-2xl font-medium" href="../../ops/topologies/">
+                            
+                            Deployment topologies
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../ops/lb-identity/">
+                            
+                            Load balancing &amp; client identity
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../ops/storage/">
+                            
+                            Storage backends (posix/S3)
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../ops/ca/">
+                            
+                            CA &amp; certificate management
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../ops/upgrades/">
+                            
+                            Upgrades &amp; consistency
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../ops/monitoring/">
+                            
+                            Monitoring &amp; dashboards
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../ops/capacity/">
+                            
+                            Capacity &amp; sizing
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../ops/runbooks/">
+                            
+                            Runbooks
+                            
+                        </a>
+</div>
+</div>
+<div class="flex flex-col gap-4">
+<div class="text-muted-foreground text-sm font-medium">Security</div>
+<div class="flex flex-col gap-3">
+<a class="text-2xl font-medium" href="../../security/threat-model/">
+                            
+                            Threat model (containment)
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../security/secrets/">
+                            
+                            Secrets at rest
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../security/invariants/">
+                            
+                            Deployment invariants
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../security/hardening/">
+                            
+                            Hardening checklist
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../security/secret-ops/">
+                            
+                            Secret rotation &amp; recovery
+                            
+                        </a>
+</div>
+</div>
+<div class="flex flex-col gap-4">
+<div class="text-muted-foreground text-sm font-medium">Reference</div>
+<div class="flex flex-col gap-3">
+<a class="text-2xl font-medium" href="../../reference/rule-schema/">
+                            
+                            Rule-file schema
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../reference/wire-format/">
+                            
+                            Broker wire format
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../reference/metrics/">
+                            
+                            Metrics catalog
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../reference/logs/">
+                            
+                            Log fields
+                            
+                        </a>
+<a class="text-2xl font-medium" href="../../reference/glossary/">
+                            
+                            Glossary
+                            
+                        </a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</dialog>
+<div class="sticky top-[calc(var(--header-height)+1px)] ml-auto hidden h-[calc(100svh-var(--header-height)-var(--footer-height))] w-72 flex-col gap-4 overflow-hidden overscroll-none pb-8 xl:flex">
+<div class="h-(--top-spacing) shrink-0"></div>
+<div class="no-scrollbar overflow-y-auto px-8" id="toc" view-transition-name="toc">
+<div class="flex flex-col gap-2 p-4 pt-0 text-sm">
+<p class="text-muted-foreground bg-background sticky top-0 h-6 text-xs">On This Page</p>
+</div>
+<div class="h-12"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
 </div>
 </main>
-<footer class="md-footer">
-<div class="md-footer-meta md-typeset">
-<div class="md-footer-meta__inner md-grid">
-<div class="md-copyright">
-  
-  
-    Made with
-    <a href="https://squidfunk.github.io/mkdocs-material/" rel="noopener" target="_blank">
-      Material for MkDocs
-    </a>
+<footer class="group-has-[.section-soft]/body:bg-surface/40 3xl:fixed:bg-transparent dark:bg-transparent" view-transition-name="footer">
+<div class="container-wrapper px-4 xl:px-6">
+<div class="flex h-(--footer-height) items-center justify-between">
+<div class="text-muted-foreground w-full text-center text-xs leading-loose sm:text-sm">
+<a href="https://github.com/asiffer/mkdocs-shadcn">shadcn theme</a> provided by
+                <a href="https://github.com/asiffer">@asiffer</a>
 </div>
 </div>
 </div>
 </footer>
 </div>
-<div class="md-dialog" data-md-component="dialog">
-<div class="md-dialog__inner md-typeset"></div>
-</div>
-<script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
-<script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
-</body>
+<script src="../../search/main.js"></script>
+<script integrity="sha384-JLNLRFGzvOp0up707XKgSnAjjt1w5BF/+lbeLQvlf6mNwf0m89IXFdpNAk4t6Hcs" src="../../js/copy-button.js"></script>
+<script integrity="sha384-JBx6cBEiyhK1KPwZgBHiI6GDaAmvlOxMQFyWAZTEpW5Ifo5XQ2LBcJ61GVOumwF1" src="../../js/sidebar.js"></script>
+<script integrity="sha384-fNURFMRt0p/HqXnQnV4+CT9dX1GiU5F0fC3pFbg7gfoANytoUMErSW7suWSBkSuF" src="../../js/slider.js"></script>
+<script>updatePygmentsStylesheet();</script>
+<script>fetchStargazers("None");</script>
+<script type="speculationrules">
+{
+  "prerender": [
+    {
+      "where": {
+          "selector_matches": ["#next-button", "#previous-button"]
+      }
+    }
+  ]
+}
+</script>
+<script type="module">import mermaid from "../../assets/javascripts/mermaid.mjs";
+mermaid.initialize({});</script></body>
 </html>
