@@ -197,6 +197,23 @@
                 </div>
                 
                 <div data-orientation="vertical" role="none" data-slot="separator"
+                    class="bg-border shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px ml-2 hidden lg:block">
+                </div>
+                <a target="_blank" rel="noreferrer" data-slot="button"
+                    class="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:pointer-events-none [&amp;_svg:not([class*='size-'])]:size-4 shrink-0 [&amp;_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 rounded-md gap-1.5 px-3 has-[&gt;svg]:px-2.5 h-8 shadow-none"
+                    href="https://github.com/mosquito/mitmania">
+                    <svg viewBox="0 0 438.549 438.549">
+                        <path fill="currentColor"
+                            d="M409.132 114.573c-19.608-33.596-46.205-60.194-79.798-79.8-33.598-19.607-70.277-29.408-110.063-29.408-39.781 0-76.472 9.804-110.063 29.408-33.596 19.605-60.192 46.204-79.8 79.8C9.803 148.168 0 184.854 0 224.63c0 47.78 13.94 90.745 41.827 128.906 27.884 38.164 63.906 64.572 108.063 79.227 5.14.954 8.945.283 11.419-1.996 2.475-2.282 3.711-5.14 3.711-8.562 0-.571-.049-5.708-.144-15.417a2549.81 2549.81 0 01-.144-25.406l-6.567 1.136c-4.187.767-9.469 1.092-15.846 1-6.374-.089-12.991-.757-19.842-1.999-6.854-1.231-13.229-4.086-19.13-8.559-5.898-4.473-10.085-10.328-12.56-17.556l-2.855-6.57c-1.903-4.374-4.899-9.233-8.992-14.559-4.093-5.331-8.232-8.945-12.419-10.848l-1.999-1.431c-1.332-.951-2.568-2.098-3.711-3.429-1.142-1.331-1.997-2.663-2.568-3.997-.572-1.335-.098-2.43 1.427-3.289 1.525-.859 4.281-1.276 8.28-1.276l5.708.853c3.807.763 8.516 3.042 14.133 6.851 5.614 3.806 10.229 8.754 13.846 14.842 4.38 7.806 9.657 13.754 15.846 17.847 6.184 4.093 12.419 6.136 18.699 6.136 6.28 0 11.704-.476 16.274-1.423 4.565-.952 8.848-2.383 12.847-4.285 1.713-12.758 6.377-22.559 13.988-29.41-10.848-1.14-20.601-2.857-29.264-5.14-8.658-2.286-17.605-5.996-26.835-11.14-9.235-5.137-16.896-11.516-22.985-19.126-6.09-7.614-11.088-17.61-14.987-29.979-3.901-12.374-5.852-26.648-5.852-42.826 0-23.035 7.52-42.637 22.557-58.817-7.044-17.318-6.379-36.732 1.997-58.24 5.52-1.715 13.706-.428 24.554 3.853 10.85 4.283 18.794 7.952 23.84 10.994 5.046 3.041 9.089 5.618 12.135 7.708 17.705-4.947 35.976-7.421 54.818-7.421s37.117 2.474 54.823 7.421l10.849-6.849c7.419-4.57 16.18-8.758 26.262-12.565 10.088-3.805 17.802-4.853 23.134-3.138 8.562 21.509 9.325 40.922 2.279 58.24 15.036 16.18 22.559 35.787 22.559 58.817 0 16.178-1.958 30.497-5.853 42.966-3.9 12.471-8.941 22.457-15.125 29.979-6.191 7.521-13.901 13.85-23.131 18.986-9.232 5.14-18.182 8.85-26.84 11.136-8.662 2.286-18.415 4.004-29.263 5.146 9.894 8.562 14.842 22.077 14.842 40.539v60.237c0 3.422 1.19 6.279 3.572 8.562 2.379 2.279 6.136 2.95 11.276 1.995 44.163-14.653 80.185-41.062 108.068-79.226 27.88-38.161 41.825-81.126 41.825-128.906-.01-39.771-9.818-76.454-29.414-110.049z">
+                        </path>
+                    </svg>
+                    
+                    <span id="stargazers" class="text-muted-foreground w-8 text-xs tabular-nums" onload="test()">
+                    </span>
+                    
+                </a>
+                
+                <div data-orientation="vertical" role="none" data-slot="separator"
                     class="bg-border shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px 3xl:flex hidden">
                 </div>
                 
@@ -1531,35 +1548,105 @@
     </div>
   </div>
   <div class="typography w-full flex-1 *:data-[slot=alert]:first:mt-0">
-    <p><strong>A stateless data plane for egress, scaled horizontally with near-zero per-node state.</strong> A node needs only the shared storage URL, the out-of-band <code>clusterKey</code>, and its listener addresses. The signing CA, cached leaf identities, and effective rule files live behind shared Storage.</p>
+    <p><a href="https://github.com/mosquito/mitmania">Source on GitHub</a> · <a href="https://github.com/mosquito/mitmania/releases">Releases</a></p>
+<p><strong>A stateless data plane for egress, scaled horizontally with near-zero per-node state.</strong> A node needs only the shared storage URL, the out-of-band <code>clusterKey</code>, and its listener addresses. The signing CA, cached leaf identities, and effective rule files live behind shared Storage.</p>
 <p>mitmania controls outbound HTTP and HTTPS from containers, VMs, and sandboxes. It can authenticate clients, constrain resolved destinations, audit tunnels, intercept TLS, mutate traffic, and ask brokers for decisions or credentials. It does not decide organizational policy itself — see <a href="concepts/control-plane/">control plane vs. data plane</a> for what that split means and who owns which side of it.</p>
 <div class="admonition tip">
 <p class="admonition-title">Interception is optional</p>
 <p>Start with a policy proxy using <code>mitm:false</code>. TLS remains end-to-end and no CA installation is required. You still get client identity, connection-phase rules, egress controls, access logs, and metrics. See <a href="usecases/no-mitm/">Policy proxy without MITM</a>.</p>
 </div>
-<h2 id="pick-your-path">Pick your path<a class="headerlink" href="#pick-your-path" title="Permanent link">&para;</a></h2>
+<h2 id="who-its-for">Who it's for<a class="headerlink" href="#who-its-for" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Platform and infrastructure engineers</strong> who need one forward proxy that every container, VM, or CI/agent sandbox in a fleet can share, with declarative per-client and fleet-wide rules instead of per-host configuration.</li>
+<li><strong>Security and SRE teams</strong> who need an egress firewall / SSRF guard, an audited record of outbound tunnels, or a way to constrain what an untrusted or AI-agent workload can reach — without owning policy decisions themselves; that stays with whatever writes to <code>Storage</code>.</li>
+<li><strong>Anyone running a horizontally-scaled fleet</strong> who wants nodes to be interchangeable: point a new node at the same <code>Storage</code> and <code>clusterKey</code>, and it serves the same policy as every other node, with no coordination step.</li>
+</ul>
+<h2 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Policy proxy without MITM.</strong> <code>mitm:false</code> splices the tunnel: TLS stays end-to-end, no CA install needed, and you still get client identity, connection-phase rules, egress control, access logs, and metrics.</li>
+<li><strong>On-demand TLS interception.</strong> When a rule intercepts, mitmania <em>clones</em> the real certificate chain (subject, full SAN set, validity, key usage copied verbatim) and re-signs it under its own CA, so certificate validity and behavior match the origin.</li>
+<li><strong>Egress firewall / SSRF guard</strong>, evaluated independently of host-based rules, with resolved addresses pinned after a single DNS resolution to prevent rebinding.</li>
+<li><strong>Sparse-mask and CIDR rule addressing</strong>, so a single fleet-wide default table can key policy on a prefix or on a non-contiguous field carved out of an address block — see <a href="config/default-ruleset/">the default rule table</a>.</li>
+<li><strong>Mutation</strong>: block, rewrite, redact, and inject headers or credentials, bounded and streaming rather than buffering whole bodies.</li>
+<li><strong>Bring your own CA</strong> — load an existing sub-CA (chain validated fully at load) instead of mitmania's generated one.</li>
+<li><strong>Client authentication</strong> (<code>auth.http_proxy</code>) that attributes a connection without ever selecting which rule file governs it.</li>
+<li><strong>Outcalls</strong>: defer a per-request decision or credential lookup to an external broker, bounded and fail-closed.</li>
+<li><strong>Observability</strong>: OpenTelemetry metrics and traces plus structured access logs, stealth by default.</li>
+</ul>
+<h2 id="use-cases">Use cases<a class="headerlink" href="#use-cases" title="Permanent link">&para;</a></h2>
 <div class="table-wrapper"><table>
 <thead>
 <tr>
-<th>I want to…</th>
-<th>Start here</th>
+<th>Goal</th>
+<th>MITM?</th>
+<th>CA install?</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Run one useful node</td>
-<td><a href="start/install/">Get started</a></td>
+<td><a href="usecases/no-mitm/">Policy proxy</a></td>
+<td>No</td>
+<td>No</td>
 </tr>
 <tr>
-<td>Choose a deployment pattern</td>
-<td><a href="usecases/">Use cases</a></td>
+<td><a href="usecases/egress/">Egress firewall / SSRF guard</a></td>
+<td>No</td>
+<td>No</td>
 </tr>
 <tr>
-<td>Evaluate containment and trust</td>
-<td><a href="security/threat-model/">Security</a></td>
+<td><a href="usecases/auth-proxy/">Authenticated proxy</a></td>
+<td>Optional</td>
+<td>Only with MITM</td>
+</tr>
+<tr>
+<td><a href="usecases/injection/">AI agents: inject credentials without exposing them</a></td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><a href="usecases/mutation/">Block, rewrite, redact</a></td>
+<td>Usually</td>
+<td>Yes for HTTPS</td>
+</tr>
+<tr>
+<td><a href="usecases/containment/">Contain an agent or sandbox</a></td>
+<td>Optional</td>
+<td>Only with MITM</td>
+</tr>
+<tr>
+<td><a href="usecases/transparent/">Transparent interception (TPROXY/REDIRECT)</a></td>
+<td>Optional</td>
+<td>Only with MITM</td>
+</tr>
+<tr>
+<td><a href="usecases/broker/">Central policy via broker</a></td>
+<td>Yes</td>
+<td>Yes for HTTPS</td>
+</tr>
+<tr>
+<td><a href="usecases/debugging/">Debug and inspect TLS</a></td>
+<td>Yes</td>
+<td>Yes</td>
 </tr>
 </tbody>
 </table></div>
+<p>See <a href="usecases/">Choose a use case</a> for the full comparison, including listener and configuration details, or <a href="security/threat-model/">the threat model</a> to evaluate containment and trust before deploying.</p>
+<h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
+<p>Requires Go 1.26+ to build from source; prebuilt Debian/Ubuntu packages are published for <code>amd64</code>, <code>arm64</code>, <code>armhf</code>, <code>i386</code>, <code>ppc64el</code>, <code>riscv64</code>, and <code>s390x</code>.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Build from source</label><label for="__tabbed_1_2">Debian or Ubuntu package</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<pre class="highlight"><code class="language-sh">make build
+./bin/mitmania --help</code></pre>
+</div>
+<div class="tabbed-block">
+<pre class="highlight"><code class="language-sh">sudo apt install ./mitmania_1.2.3-1_amd64.deb
+sudoedit /etc/default/mitmania
+sudo systemctl enable --now mitmania</code></pre>
+</div>
+</div>
+</div>
+<p>See <a href="start/install/">Install</a> for the full walkthrough and <a href="start/first-run/">First run</a> to bring up a single node.</p>
 <h2 id="when-not-to-use-it">When not to use it<a class="headerlink" href="#when-not-to-use-it" title="Permanent link">&para;</a></h2>
 <p>Do not use mitmania as the only containment boundary: a firewall must prevent clients from reaching the network directly. It is not a general-purpose reverse proxy, a packet firewall, or a shipped implementation of the design's future SSH, IMAP, HTTP/3, Redis, or PostgreSQL handlers.</p>
   </div>
@@ -2047,10 +2134,34 @@
         
         
         
-        <a href="#pick-your-path"
+        <a href="#who-its-for"
             class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
-            data-active="false" data-depth="2" onClick="deferSetActiveTocLink('#pick-your-path');">
-            Pick your path
+            data-active="false" data-depth="2" onClick="deferSetActiveTocLink('#who-its-for');">
+            Who it's for
+        </a>
+        
+
+        
+        <a href="#features"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="2" onClick="deferSetActiveTocLink('#features');">
+            Features
+        </a>
+        
+
+        
+        <a href="#use-cases"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="2" onClick="deferSetActiveTocLink('#use-cases');">
+            Use cases
+        </a>
+        
+
+        
+        <a href="#install"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="2" onClick="deferSetActiveTocLink('#install');">
+            Install
         </a>
         
 
@@ -2108,7 +2219,7 @@
         src="js/slider.js"></script>
     <script>updatePygmentsStylesheet();</script>
     
-    <script>fetchStargazers("None");</script>
+    <script>fetchStargazers("https://github.com/mosquito/mitmania");</script>
     
     
     
