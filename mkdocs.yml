@@ -1,6 +1,8 @@
 site_name: mitmania
 site_description: Distributed policy and interception proxy for controlled egress
 site_url: https://docs.mitmania.com/
+repo_url: https://github.com/mosquito/mitmania
+repo_name: mosquito/mitmania
 docs_dir: docs
 
 theme:
