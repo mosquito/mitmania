@@ -1,0 +1,24 @@
+{
+  "uuid": "docs-private-service",
+  "egress": [
+    {
+      "cidr": "10.20.0.0/16",
+      "port": "443",
+      "proto": "http",
+      "action": "allow"
+    },
+    {
+      "cidr": "10.0.0.0/8",
+      "action": "deny"
+    },
+    {
+      "cidr": "0.0.0.0/0",
+      "action": "allow"
+    },
+    {
+      "cidr": "::/0",
+      "action": "allow"
+    }
+  ],
+  "http": []
+}
