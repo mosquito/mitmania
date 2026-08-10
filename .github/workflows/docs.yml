@@ -44,6 +44,17 @@ jobs:
       github.event_name == 'release' ||
       (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
     runs-on: ubuntu-latest
+    # A push to the default branch and a published release can trigger this
+    # job within moments of each other (as happened in practice), and both
+    # paths push to the same gh-pages branch via `mike deploy --push`. mike
+    # doesn't retry on a non-fast-forward rejection, so without this the
+    # second deploy to land just fails outright. One shared group across
+    # every trigger queues them instead of racing; cancel-in-progress stays
+    # false because both deploys are meaningful and neither should be
+    # dropped.
+    concurrency:
+      group: docs-deploy
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
