@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mitmania control</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2f3a;
+    --text: #e6e8eb;
+    --muted: #9aa3af;
+    --accent: #5b8cff;
+    --ok: #34c98f;
+    --danger: #ff5b6e;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    padding: 2rem;
+  }
+  h1 { font-size: 1.25rem; margin: 0 0 1.5rem; }
+  h2 { font-size: 1rem; margin: 0 0 .75rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .grid { display: grid; grid-template-columns: 280px 1fr; gap: 1.5rem; max-width: 1100px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem; }
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: .75rem; }
+  .stat { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: .75rem; }
+  .stat .n { font-size: 1.4rem; font-weight: 600; }
+  .stat .l { font-size: .75rem; color: var(--muted); }
+  a, button { color: var(--accent); }
+  button {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: .5rem .9rem; cursor: pointer; font-size: .85rem;
+  }
+  button:hover { border-color: var(--accent); }
+  .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-bottom: .75rem; }
+  input[type=text] {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); padding: .45rem .6rem; font-size: .85rem; flex: 1; min-width: 10rem;
+  }
+  textarea {
+    width: 100%; min-height: 22rem; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: .75rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8rem;
+    resize: vertical;
+  }
+  .status { font-size: .8rem; margin-top: .5rem; min-height: 1.2em; }
+  .status.ok { color: var(--ok); }
+  .status.err { color: var(--danger); }
+  .muted { color: var(--muted); font-size: .8rem; }
+</style>
+</head>
+<body>
+<h1>mitmania — control</h1>
+<div class="grid">
+  <div>
+    <div class="panel">
+      <h2>Stats</h2>
+      <div class="stats" id="stats">
+        <div class="stat"><div class="n" id="s-active">—</div><div class="l">active conns</div></div>
+        <div class="stat"><div class="n" id="s-accepted">—</div><div class="l">accepted (total)</div></div>
+        <div class="stat"><div class="n" id="s-requests">—</div><div class="l">requests</div></div>
+        <div class="stat"><div class="n" id="s-cache">—</div><div class="l">cached certs</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Root CA</h2>
+      <div class="row">
+        <a href="/ca.pem" download="mitmania-ca.pem"><button>Download .pem</button></a>
+        <a href="/ca.der" download="mitmania-ca.der"><button>Download .der</button></a>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Maintenance</h2>
+      <div class="row">
+        <button id="btn-flush">Flush cert cache</button>
+      </div>
+      <div class="status" id="maint-status"></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel">
+      <h2>Rules</h2>
+      <p class="muted" style="margin-top:0">
+        Enter a client's source IP to view or replace its rule file.
+        Changes take effect on that client's next connection — there's no
+        separate reload step.
+      </p>
+      <div class="row">
+        <input type="text" id="ip" placeholder="e.g. 10.0.0.5 or 2001:db8::1">
+        <button id="btn-open">Open</button>
+      </div>
+      <textarea id="rule-editor" placeholder="{&quot;http&quot;:[{&quot;match&quot;:{}}]}" spellcheck="false"></textarea>
+      <div class="row" style="margin-top:.75rem">
+        <button id="btn-save">Save</button>
+        <button id="btn-delete">Delete all rules for this IP</button>
+      </div>
+      <div class="status" id="rule-status"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+async function refreshStats() {
+  try {
+    const r = await fetch("/stats");
+    const s = await r.json();
+    document.getElementById("s-active").textContent = s.conns_active ?? "—";
+    document.getElementById("s-accepted").textContent = s.conns_accepted ?? "—";
+    document.getElementById("s-requests").textContent = s.requests ?? "—";
+    document.getElementById("s-cache").textContent = s.cache_entries ?? "—";
+  } catch (e) { /* transient — next tick retries */ }
+}
+
+function setStatus(id, msg, cls) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.className = "status" + (cls ? " " + cls : "");
+}
+
+function currentIP() {
+  return document.getElementById("ip").value.trim();
+}
+
+// EXAMPLE_RULES seeds a brand-new client's editor with the minimal
+// working rule file (§10: "End with {"match": {}} for an explicit
+// default") instead of an empty shell there's nothing to build from.
+// egress is spelled out explicitly rather than omitted: the private
+// ranges are denied, then everything else allowed (deny-by-omission
+// means the trailing allow-all entries are load-bearing, not decorative).
+const EXAMPLE_RULES = {
+  http: [
+    { match: {} }
+  ],
+  egress: [
+    { cidr: "10.0.0.0/8", action: "deny" },
+    { cidr: "172.16.0.0/12", action: "deny" },
+    { cidr: "192.168.0.0/16", action: "deny" },
+    { cidr: "0.0.0.0/0", action: "allow" },
+    { cidr: "2000::/3", action: "allow" },
+    { cidr: "64:ff9b::/96", action: "allow" }
+  ]
+};
+
+// isEmptyRuleFile reports whether parsed is the shape a client with no
+// saved rule file reads back as ({"http":[]}, no egress key) — the case
+// EXAMPLE_RULES replaces, whether that's because the file has genuinely
+// never been saved or because it was saved as this same empty shell
+// (the two are behaviorally identical: no-match on everything either way).
+function isEmptyRuleFile(parsed) {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+  const keys = Object.keys(parsed);
+  return keys.length === 1 && keys[0] === "http" && Array.isArray(parsed.http) && parsed.http.length === 0;
+}
+
+async function openRule() {
+  const ip = currentIP();
+  if (!ip) { setStatus("rule-status", "Enter a client IP first.", "err"); return; }
+  setStatus("rule-status", "", "");
+  const r = await fetch("/rules/" + encodeURIComponent(ip));
+  const text = await r.text();
+  let value = text;
+  try {
+    const parsed = JSON.parse(text);
+    value = JSON.stringify(isEmptyRuleFile(parsed) ? EXAMPLE_RULES : parsed, null, 2);
+  } catch (e) {
+    value = text;
+  }
+  document.getElementById("rule-editor").value = value;
+}
+
+document.getElementById("btn-open").addEventListener("click", openRule);
+
+// Enter in the IP field opens it, same as clicking "Open" — the input
+// isn't inside a <form>, so without this, Enter here silently did nothing.
+document.getElementById("ip").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  openRule();
+});
+
+document.getElementById("btn-save").addEventListener("click", async () => {
+  const ip = currentIP();
+  if (!ip) { setStatus("rule-status", "Enter a client IP first.", "err"); return; }
+  const body = document.getElementById("rule-editor").value;
+  try {
+    JSON.parse(body);
+  } catch (e) {
+    setStatus("rule-status", "Not valid JSON: " + e.message, "err");
+    return;
+  }
+  const r = await fetch("/rules/" + encodeURIComponent(ip), { method: "PUT", body });
+  setStatus("rule-status", r.ok ? "Saved." : "Save failed: " + (await r.text()), r.ok ? "ok" : "err");
+});
+
+document.getElementById("btn-delete").addEventListener("click", async () => {
+  const ip = currentIP();
+  if (!ip) { setStatus("rule-status", "Enter a client IP first.", "err"); return; }
+  if (!confirm("Revoke all rules for " + ip + "? This client falls back to no-match (511) until a new rule file is saved.")) return;
+  const r = await fetch("/rules/" + encodeURIComponent(ip), { method: "DELETE" });
+  setStatus("rule-status", r.ok ? "Deleted." : "Delete failed: " + (await r.text()), r.ok ? "ok" : "err");
+  if (r.ok) document.getElementById("rule-editor").value = "";
+});
+
+document.getElementById("btn-flush").addEventListener("click", async () => {
+  const r = await fetch("/cache", { method: "DELETE" });
+  setStatus("maint-status", r.ok ? "Cert cache flushed." : "Flush failed.", r.ok ? "ok" : "err");
+  refreshStats();
+});
+
+refreshStats();
+setInterval(refreshStats, 2000);
+</script>
+</body>
+</html>

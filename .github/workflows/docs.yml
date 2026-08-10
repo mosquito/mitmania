@@ -1,0 +1,68 @@
+name: docs
+
+on:
+  pull_request:
+  push:
+  release:
+    types:
+      - published
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --requirement requirements-docs.txt
+      - name: Compile documentation rule snippets
+        run: go test ./internal/rules -run DocumentationRuleSnippets
+      - name: Build documentation and check links
+        run: mkdocs build --strict
+
+  # Publishes the site built above to the gh-pages branch via mike, mkdocs-material's
+  # versioning tool. mike commits each deploy under a version directory (e.g. "dev" or
+  # a release tag) and maintains a "latest" alias, so gh-pages ends up serving both a
+  # specific version and an always-current /latest/ path from a single branch.
+  #
+  # Only runs for pushes to the repo's default branch and for published GitHub
+  # releases - never for pull requests, so untrusted PR branches can't push docs.
+  #
+  # MANUAL SETUP REQUIRED (one-time, repo Settings, cannot be done from this file):
+  #   Settings -> Pages -> Source -> "Deploy from a branch" -> gh-pages / (root)
+  #   The gh-pages branch itself is created automatically by the first successful
+  #   run of this job (via `mike deploy --push`), so create it in Settings only
+  #   after that first run has completed.
+  deploy:
+    name: Deploy documentation (mike)
+    needs: build
+    if: >
+      github.event_name == 'release' ||
+      (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --requirement requirements-docs.txt
+      - name: Configure git identity for mike
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Deploy in-development docs (pushes to the default branch)
+        if: github.event_name == 'push'
+        run: mike deploy --push --update-aliases dev latest
+      - name: Deploy versioned release docs (published GitHub releases)
+        if: github.event_name == 'release'
+        run: mike deploy --push --update-aliases "${{ github.event.release.tag_name }}" latest
+      - name: Point the site root at the latest version
+        run: mike set-default --push latest

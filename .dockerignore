@@ -1,0 +1,10 @@
+.git
+.github
+bin
+docs
+design
+site
+state
+*.sock
+*.test
+*.out

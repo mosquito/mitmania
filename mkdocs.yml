@@ -1,0 +1,118 @@
+site_name: mitmania
+site_description: Distributed policy and interception proxy for controlled egress
+site_url: https://docs.mitmania.com/
+docs_dir: docs
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - content.code.copy
+    - content.tabs.link
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+  - mermaid2:
+      javascript: assets/javascripts/mermaid.mjs
+  - redirects:
+      redirect_maps: {}
+  - mike:
+      alias_type: symlink
+      canonical_version: latest
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets:
+      base_path: docs
+      check_paths: true
+
+nav:
+  - Home: index.md
+  - Concepts:
+      - What mitmania is: concepts/overview.md
+      - Control plane vs. data plane: concepts/control-plane.md
+      - Request pipeline: concepts/pipeline.md
+      - Interception & certificates: concepts/certificates.md
+      - Identity, rules & phases: concepts/identity-rules.md
+      - Distributed operation: concepts/distributed.md
+      - State & storage: concepts/storage.md
+  - Get started:
+      - Install: start/install.md
+      - First run (single node): start/first-run.md
+      - Trust the CA: start/trust-ca.md
+      - Point a client: start/point-client.md
+      - Verify it works: start/verify.md
+  - Use cases:
+      - Overview: usecases/index.md
+      - Policy proxy without MITM: usecases/no-mitm.md
+      - Egress firewall & SSRF guard: usecases/egress.md
+      - Authenticating forward proxy: usecases/auth-proxy.md
+      - Header & credential injection: usecases/injection.md
+      - Block, rewrite, redact: usecases/mutation.md
+      - Agent / sandbox containment: usecases/containment.md
+      - Transparent interception (TPROXY/REDIRECT): usecases/transparent.md
+      - Central policy via broker: usecases/broker.md
+      - Debugging & inspecting TLS: usecases/debugging.md
+  - Tutorials:
+      - Egress allowlist for Docker (no MITM): tutorials/egress-docker.md
+      - Transparent interception with nftables: tutorials/transparent-nft.md
+      - Inject an API token via a broker: tutorials/broker-token.md
+      - Per-client rules with proxy-auth identity: tutorials/proxy-auth-identity.md
+      - Run a cluster on S3: tutorials/cluster-s3.md
+      - Bring your own CA: tutorials/byo-ca.md
+  - Configuration:
+      - CLI & flags: config/cli.md
+      - Rule files: config/rules.md
+      - Matching & actions: config/actions.md
+      - Egress policy: config/egress.md
+      - Client authentication: config/auth.md
+      - Outcalls (brokers): config/outcalls.md
+      - Error pages & status codes: config/errors.md
+      - Telemetry & logging: config/observability.md
+  - Operations:
+      - Deployment topologies: ops/topologies.md
+      - Load balancing & client identity: ops/lb-identity.md
+      - Storage backends (posix/S3): ops/storage.md
+      - CA & certificate management: ops/ca.md
+      - Upgrades & consistency: ops/upgrades.md
+      - Monitoring & dashboards: ops/monitoring.md
+      - Capacity & sizing: ops/capacity.md
+      - Runbooks: ops/runbooks.md
+  - Security:
+      - Threat model (containment): security/threat-model.md
+      - Secrets at rest: security/secrets.md
+      - Deployment invariants: security/invariants.md
+      - Hardening checklist: security/hardening.md
+      - Secret rotation & recovery: security/secret-ops.md
+  - Reference:
+      - Rule-file schema: reference/rule-schema.md
+      - Broker wire format: reference/wire-format.md
+      - Metrics catalog: reference/metrics.md
+      - Log fields: reference/logs.md
+      - Glossary: reference/glossary.md
+  - FAQ & troubleshooting: faq.md
