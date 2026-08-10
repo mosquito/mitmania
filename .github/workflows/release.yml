@@ -140,6 +140,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
+          # gh infers the target repo from the local git remote by default;
+          # this job only downloads artifacts, it never checks the repo
+          # out, so without GH_REPO it fails with "not a git repository".
+          GH_REPO: ${{ github.repository }}
         run: gh release upload "${RELEASE_TAG}" release/* --clobber
 
   container:
