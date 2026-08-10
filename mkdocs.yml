@@ -4,23 +4,8 @@ site_url: https://docs.mitmania.com/
 docs_dir: docs
 
 theme:
-  name: material
-  features:
-    - navigation.tabs
-    - navigation.sections
-    - content.code.copy
-    - content.tabs.link
-  palette:
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
+  name: shadcn
+  show_stargazers: true
 
 plugins:
   - search
@@ -44,7 +29,7 @@ markdown_extensions:
       custom_fences:
         - name: mermaid
           class: mermaid
-          format: !!python/name:pymdownx.superfences.fence_code_format
+          format: !!python/name:mermaid2.fence_mermaid
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.snippets:
@@ -88,6 +73,7 @@ nav:
   - Configuration:
       - CLI & flags: config/cli.md
       - Rule files: config/rules.md
+      - The default rule table: config/default-ruleset.md
       - Matching & actions: config/actions.md
       - Egress policy: config/egress.md
       - Client authentication: config/auth.md

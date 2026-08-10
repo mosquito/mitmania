@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -22,12 +23,22 @@ func TestDocumentationRuleSnippets(t *testing.T) {
 	}
 
 	for _, path := range paths {
-		path := path
 		t.Run(filepath.Base(path), func(t *testing.T) {
 			t.Parallel()
 			data, err := os.ReadFile(path)
 			if err != nil {
 				t.Fatal(err)
+			}
+
+			// A rules/default table is a CIDR/mask-keyed object, not a
+			// single RuleFile - compile it through the production
+			// default-table path so the documented worked example stays
+			// valid.
+			if strings.HasPrefix(filepath.Base(path), "default-") {
+				if _, _, err := CompileDefaultRuleset(data); err != nil {
+					t.Fatalf("default ruleset: %v", err)
+				}
+				return
 			}
 
 			var rf RuleFile
