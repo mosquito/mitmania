@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mitmania.example.invalid/schema/rule-file.json",
+  "title": "mitmania rule file",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["http"],
+  "properties": {
+    "uuid": {"type": "string"},
+    "auth": {"$ref": "#/$defs/auth"},
+    "egress": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/egress"}
+    },
+    "http": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/rule"}
+    }
+  },
+  "$defs": {
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"http_proxy": {"$ref": "#/$defs/httpProxyAuth"}}
+    },
+    "httpProxyAuth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required": {"type": "boolean", "default": false},
+        "realm": {"type": "string"},
+        "basic": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["user", "hash"], "properties": {"user": {"type": "string"}, "hash": {"type": "string"}}}},
+        "bearer": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["id", "hash"], "properties": {"id": {"type": "string"}, "hash": {"type": "string"}}}},
+        "broker": {"$ref": "#/$defs/broker"}
+      }
+    },
+    "broker": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"socket": {"type": "string"}, "url": {"type": "string"}, "path": {"type": "string"}},
+      "oneOf": [{"required": ["socket"]}, {"required": ["url"]}]
+    },
+    "egress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cidr", "action"],
+      "properties": {
+        "cidr": {"type": "string"},
+        "port": {"type": "string"},
+        "proto": {"type": "string"},
+        "action": {"enum": ["allow", "deny"]}
+      }
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["match"],
+      "properties": {
+        "match": {"$ref": "#/$defs/match"},
+        "mitm": {"type": "boolean", "default": true},
+        "request": {"type": "array", "items": {"$ref": "#/$defs/action"}},
+        "response": {"type": "array", "items": {"$ref": "#/$defs/action"}}
+      }
+    },
+    "match": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host": {"type": "string"}, "port": {"type": "string"}, "proto": {"type": "string"},
+        "path": {"type": "string"}, "method": {"type": "string"}, "status": {"type": "string"},
+        "header": {"type": "object", "additionalProperties": {"type": "string"}}
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action"],
+      "properties": {"action": {"type": "string"}, "params": {"type": "object"}}
+    }
+  }
+}
