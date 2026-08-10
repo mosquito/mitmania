@@ -61,9 +61,15 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # fetch-depth: 0 is required by mike - a shallow clone has no local
+      # history for the existing gh-pages branch, so mike can't establish
+      # ancestry and its push looks like a non-fast-forward even when
+      # nothing else has touched the branch (observed: three straight
+      # "fetch first" rejections with gh-pages not actually moving).
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
