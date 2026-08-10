@@ -1,10 +1,4 @@
-.git
-.github
-bin
-docs
-design
-site
-state
-*.sock
-*.test
-*.out
+**
+!Dockerfile
+!docker-binaries/
+!docker-binaries/**

@@ -1,0 +1,13 @@
+Package: mitmania
+Version: @VERSION@
+Architecture: @ARCHITECTURE@
+Maintainer: Dmitry Orlov <orlovdl@gmail.com>
+Installed-Size: @INSTALLED_SIZE@
+Depends: ca-certificates, systemd
+Section: net
+Priority: optional
+Homepage: https://docs.mitmania.com/
+Description: distributed policy and interception proxy
+ mitmania is a fail-closed egress, authentication, and HTTP/TLS policy proxy.
+ It supports end-to-end TLS splicing as well as certificate-faithful
+ interception, per-client rules, broker outcalls, and shared cluster state.
