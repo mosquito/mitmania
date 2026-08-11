@@ -1,5 +1,7 @@
 # mitmania
 
+[![Coverage Status](https://coveralls.io/repos/github/mosquito/mitmania/badge.svg?branch=master)](https://coveralls.io/github/mosquito/mitmania?branch=master)
+
 [GitHub](https://github.com/mosquito/mitmania) · [Documentation](https://docs.mitmania.com/) · [Releases](https://github.com/mosquito/mitmania/releases)
 
 **A stateless data plane for egress: an intercepting HTTP/HTTPS forward proxy that scales horizontally with near-zero per-node state.**
