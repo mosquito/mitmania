@@ -1561,7 +1561,7 @@
 <h2 id="why-did-my-rule-put-fail-although-the-json-is-valid">Why did my rule PUT fail although the JSON is valid?<a class="headerlink" href="#why-did-my-rule-put-fail-although-the-json-is-valid" title="Permanent link">&para;</a></h2>
 <p>PUT also compiles patterns and actions, validates auth/egress, checks complete default-table coverage, and probes outcalls. The response body names the rejected condition. Use <code>?validate=false</code> only when a broker intentionally starts later.</p>
 <h2 id="why-wont-a-transparent-listener-start">Why won't a transparent listener start?<a class="headerlink" href="#why-wont-a-transparent-listener-start" title="Permanent link">&para;</a></h2>
-<p>REDIRECT and TPROXY are not implemented in the current binary. Use the explicit listener until a release marks those transports shipped.</p>
+<p><code>--listen-http-tproxy</code>/<code>--listen-http-redirect</code> are Linux-only (<code>SO_ORIGINAL_DST</code> and <code>IP_TRANSPARENT</code> have no portable equivalent); on any other platform the binary reports which one at startup rather than silently ignoring the flag. Both also reject a <code>unix://</code> address outright — REDIRECT/TPROXY are IP-routing concepts with no meaningful destination to recover over a Unix socket. On Linux with a <code>tcp://</code> address, a listener that still won't bind is almost always the kernel-side setup, not mitmania: for TPROXY, <code>IP_TRANSPARENT</code> needs <code>CAP_NET_ADMIN</code>; for either, the actual traffic redirection is entirely the operator's own nftables/<code>ip rule</code> responsibility (see <a href="../usecases/transparent/">transparent interception</a>) — mitmania only ever sees what the kernel hands it.</p>
   </div>
   
   <script>

@@ -1085,7 +1085,7 @@
 <p>An <strong>explicit</strong> client knows it is using a proxy and sends <code>CONNECT</code> or absolute-form HTTP. A <strong>transparent</strong> deployment uses firewall steering and recovers the original destination. In either transport, <code>mitm:false</code> leaves TLS end-to-end; MITM terminates both TLS legs so message-phase policy can run.</p>
 <div class="admonition note">
 <p class="admonition-title">Current v1 implementation</p>
-<p>Explicit HTTP and TLS-terminated explicit listeners ship. The CLI reserves transparent REDIRECT and TPROXY listeners, but currently rejects them as not implemented. SSH, IMAP, HTTP/3, Redis, and PostgreSQL are design-space, not shipped features.</p>
+<p>Explicit HTTP, TLS-terminated explicit, and transparent REDIRECT/TPROXY listeners all ship (the latter two Linux-only). SSH, IMAP, HTTP/3, Redis, and PostgreSQL are design-space, not shipped features.</p>
 </div>
 <p>Next: <a href="../pipeline/">follow the request pipeline</a> or <a href="../../usecases/no-mitm/">run without MITM</a>.</p>
 </div>

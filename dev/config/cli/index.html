@@ -1576,7 +1576,7 @@
 </tr>
 <tr>
 <td>Listeners</td>
-<td><code>--listen-http-proxy</code>; <code>--listen-https-proxy</code>; reserved transparent listener flags</td>
+<td><code>--listen-http-proxy</code>; <code>--listen-https-proxy</code>; <code>--listen-http-tproxy</code>; <code>--listen-http-redirect</code> (transparent, Linux-only)</td>
 </tr>
 <tr>
 <td>HTTP bounds</td>
@@ -1611,7 +1611,7 @@
 <p>Address values are URL-like: <code>tcp://HOST:PORT</code> or <code>unix:///path</code>; <code>*</code> means all IPv4 and IPv6 interfaces. <code>clusterKey</code> is base64 and must decode to at least 32 bytes. When <code>XDG_RUNTIME_DIR</code> is unset, supply <code>--control</code> explicitly.</p>
 <div class="admonition note">
 <p class="admonition-title">Applies to v1</p>
-<p>The transparent TPROXY and REDIRECT flags appear in help but are not implemented. A zero-data-listener configuration fails at startup.</p>
+<p>At least one data listener is required; a configuration with none of the four listener flags set fails at startup. <code>--listen-http-tproxy</code>/<code>--listen-http-redirect</code> are Linux-only and reject a <code>unix://</code> address (see <a href="../../faq/">the FAQ</a> for why).</p>
 </div>
   </div>
   

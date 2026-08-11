@@ -1561,11 +1561,7 @@
     </div>
   </div>
   <div class="typography w-full flex-1 *:data-[slot=alert]:first:mt-0">
-    <div class="admonition warning">
-<p class="admonition-title">Design-space, not shipped</p>
-<p>The current binary exposes <code>--listen-http-redirect</code> and <code>--listen-http-tproxy</code> for compatibility with the v1 design, but startup reports these transports as not implemented. Do not deploy the nftables rules below yet.</p>
-</div>
-<p>Choose REDIRECT for simple destination-NAT steering, or TPROXY when the listener must retain transparent socket semantics. Both examples scope capture to traffic arriving from <code>docker0</code>, which keeps locally originated mitmania upstream connections out of the rule.</p>
+    <p>Choose REDIRECT for simple destination-NAT steering, or TPROXY when the listener must retain transparent socket semantics. Both examples scope capture to traffic arriving from <code>docker0</code>, which keeps locally originated mitmania upstream connections out of the rule — scoping to the ingress interface, not just the destination port, is what actually prevents mitmania's own outbound connection to the real origin from being recaptured and redirected back to itself.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">REDIRECT</label><label for="__tabbed_1_2">TPROXY</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -1607,7 +1603,7 @@ sudo nft list table ip mitmania</code></pre>
 <p class="admonition-title">Security</p>
 <p>Scope capture to the workload boundary and block direct egress there. A broad host-wide rule can recapture the proxy's own upstream connections, create loops, or intercept management traffic.</p>
 </div>
-<p>Once the listener ships, this tutorial will cover loop prevention, CA installation in the intercepted container, an effective MITM rule, and a decrypted access-log check. Until then, use the <a href="../../start/point-client/">explicit proxy setup</a>.</p>
+<p>Next: install <a href="../../start/trust-ca/">the CA</a> in the intercepted container to add MITM rules, or continue with <a href="../../start/point-client/">the explicit proxy setup</a> for a simpler non-transparent deployment.</p>
   </div>
   
   <script>

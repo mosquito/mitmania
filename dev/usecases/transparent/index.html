@@ -1561,12 +1561,11 @@
     </div>
   </div>
   <div class="typography w-full flex-1 *:data-[slot=alert]:first:mt-0">
-    <div class="admonition warning">
-<p class="admonition-title">Design-space, not shipped</p>
-<p>The current binary exposes the transparent listener flags, but both listeners still fail startup as not implemented. These examples document the intended deployment contract so operators can review the topology; they are not currently deployable.</p>
-</div>
-<p><strong>Who and why:</strong> operators need to govern containers, VMs, appliances, or agents that cannot be configured with an explicit HTTP proxy—or that must not be able to opt out by clearing proxy environment variables.</p>
+    <p><strong>Who and why:</strong> operators need to govern containers, VMs, appliances, or agents that cannot be configured with an explicit HTTP proxy—or that must not be able to opt out by clearing proxy environment variables.</p>
 <p><strong>MITM required?</strong> No for connection and resolved-address policy; yes when HTTPS method, path, headers, bodies, injection, or broker decisions must be visible. A <code>mitm:false</code> rule remains an end-to-end TLS splice.</p>
+<h2 id="domain-based-matching-without-a-connect-authority">Domain-based matching without a CONNECT authority<a class="headerlink" href="#domain-based-matching-without-a-connect-authority" title="Permanent link">&para;</a></h2>
+<p>A transparent connection carries no CONNECT/absolute-form authority to read <code>host</code> from — only the destination IP:port the Acceptor recovered. To still match rules on domain, mitmania peeks the traffic itself before any rule runs: the TLS ClientHello's SNI for HTTPS, or the request's <code>Host</code> header for plaintext HTTP, in both cases <em>before</em> connection-phase matching rather than after (the reverse of the explicit CONNECT path, which already knows its host and only peeks afterward to catch an SNI/authority mismatch).</p>
+<p>A client that sends no SNI at all (permitted by TLS, though rare in practice) has no domain to match on — the destination's literal IP is used as <code>host</code> instead, the same fallback <code>mitm:false</code>'s literal-IP dial path already uses elsewhere.</p>
 <h2 id="choose-a-transport">Choose a transport<a class="headerlink" href="#choose-a-transport" title="Permanent link">&para;</a></h2>
 <div class="table-wrapper"><table>
 <thead>
@@ -2123,6 +2122,22 @@ mitmania \
         
         
         
+        
+        <a href="#domain-based-matching-without-a-connect-authority"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="2" onClick="deferSetActiveTocLink('#domain-based-matching-without-a-connect-authority');">
+            Domain-based matching without a CONNECT authority
+        </a>
+        
+
+        
+        <a href="#choose-a-transport"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="2" onClick="deferSetActiveTocLink('#choose-a-transport');">
+            Choose a transport
+        </a>
+        
+
         
         
         
