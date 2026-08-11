@@ -99,6 +99,7 @@ func TestParseRejectsNonPositiveTimeoutsAndTries(t *testing.T) {
 	for _, flagName := range []string{
 		"http-timeout-connect", "http-timeout-read", "http-connect-tries",
 		"http2-timeout-connect", "http2-timeout-read", "http2-connect-tries",
+		"outcall-timeout-connect", "outcall-timeout-read", "outcall-max-inflight",
 	} {
 		_, err := Parse([]string{
 			"--storage", "posix:///tmp/mitmania-cache",
@@ -434,5 +435,353 @@ func TestParseHelpReturnsErrHelp(t *testing.T) {
 	_, err = Parse([]string{"-h"})
 	if !errors.Is(err, ErrHelp) {
 		t.Fatalf("Parse([-h]): err = %v, want ErrHelp", err)
+	}
+}
+
+// TestParseRequiresStorageWhenHomeUnset exercises defaultStorageURL's
+// os.UserHomeDir error path (no $HOME to fall back to) and Parse's own
+// "could not determine a default" guard when neither --storage nor
+// $XDG_CACHE_HOME nor $HOME can supply one.
+func TestParseRequiresStorageWhenHomeUnset(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", "")
+	t.Setenv("HOME", "")
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "--storage is required") {
+		t.Fatalf("Parse: expected --storage-required error, got %v", err)
+	}
+}
+
+func TestParseRejectsMalformedStorageURL(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "posix://%zzbad",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "--storage") {
+		t.Fatalf("Parse: expected --storage invalid-URL error, got %v", err)
+	}
+}
+
+func TestParseRejectsUnsupportedStorageScheme(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "http://example.invalid/",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "unsupported scheme") {
+		t.Fatalf("Parse: expected --storage unsupported-scheme error, got %v", err)
+	}
+}
+
+func TestParseRejectsInvalidClusterKeyBase64(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", "not-valid-base64!!!",
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid base64") {
+		t.Fatalf("Parse: expected invalid-base64 error, got %v", err)
+	}
+}
+
+// TestParseRejectsUnknownFlag exercises kong's own parser.Parse error path,
+// distinct from every field-level validation Parse performs afterward.
+func TestParseRejectsUnknownFlag(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+		"--not-a-real-flag", "1",
+	})
+	if err == nil || !strings.Contains(err.Error(), "not-a-real-flag") {
+		t.Fatalf("Parse: expected unknown-flag error, got %v", err)
+	}
+}
+
+func TestParseRejectsMalformedListenHTTPProxyAddr(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*",
+		"--cluster-key", validKey(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "--listen-http-proxy") {
+		t.Fatalf("Parse: expected --listen-http-proxy addr error, got %v", err)
+	}
+}
+
+func TestParseRejectsUnsupportedListenHTTPProxyScheme(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "udp://*:3128",
+		"--cluster-key", validKey(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "--listen-http-proxy") || !strings.Contains(err.Error(), "udp") {
+		t.Fatalf("Parse: expected --listen-http-proxy scheme error, got %v", err)
+	}
+}
+
+func TestParseRejectsUnsupportedListenHTTPSProxyScheme(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-https-proxy", "udp://*:8443",
+		"--cluster-key", validKey(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "--listen-https-proxy") {
+		t.Fatalf("Parse: expected --listen-https-proxy scheme error, got %v", err)
+	}
+}
+
+// TestParseAcceptsListenHTTPSProxy is the valid-path companion to the
+// scheme-rejection test above: no existing test successfully parses
+// --listen-https-proxy at all, so its default-CN fallback went uncovered.
+func TestParseAcceptsListenHTTPSProxy(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	cfg, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-https-proxy", "tcp://*:8443",
+		"--cluster-key", validKey(),
+	})
+	if err != nil {
+		t.Fatalf("Parse: unexpected error: %v", err)
+	}
+	if cfg.HTTPSProxy == nil {
+		t.Fatal("HTTPSProxy = nil, want set")
+	}
+	if cfg.HTTPSProxy.Addr.Scheme != "tcp" || cfg.HTTPSProxy.Addr.Port != 8443 {
+		t.Fatalf("HTTPSProxy.Addr = %+v, want tcp:8443", cfg.HTTPSProxy.Addr)
+	}
+	if len(cfg.HTTPSProxy.Names) != 1 || cfg.HTTPSProxy.Names[0] != "Internal Proxy" {
+		t.Fatalf("HTTPSProxy.Names = %v, want default [\"Internal Proxy\"]", cfg.HTTPSProxy.Names)
+	}
+}
+
+func TestParseRejectsMalformedControlAddr(t *testing.T) {
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--control", "tcp://*",
+		"--cluster-key", validKey(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "--control") {
+		t.Fatalf("Parse: expected --control addr error, got %v", err)
+	}
+}
+
+func TestParseRejectsUnsupportedControlScheme(t *testing.T) {
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--control", "udp://127.0.0.1:9000",
+		"--cluster-key", validKey(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "--control") {
+		t.Fatalf("Parse: expected --control scheme error, got %v", err)
+	}
+}
+
+func TestParseRejectsMalformedHeaderLimit(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+		"--http-header-limit", "notanumber",
+	})
+	if err == nil || !strings.Contains(err.Error(), "--http-header-limit") {
+		t.Fatalf("Parse: expected --http-header-limit parse error, got %v", err)
+	}
+}
+
+func TestParseRejectsMalformedBodyWindow(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+		"--http-body-window", "notanumber",
+	})
+	if err == nil || !strings.Contains(err.Error(), "--http-body-window") {
+		t.Fatalf("Parse: expected --http-body-window parse error, got %v", err)
+	}
+}
+
+// TestParseRejectsOverflowedBodyWindow: ParseSize only rejects an
+// explicitly negative numeric part — it doesn't check for int overflow
+// after applying the k/m/g multiplier, so a value like this multiplies
+// past math.MaxInt64 and wraps negative. Parse's own bodyWindow < 0 guard
+// is what actually catches this, distinct from ParseSize's own error path.
+func TestParseRejectsOverflowedBodyWindow(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+		"--http-body-window", "8589934592g",
+	})
+	if err == nil || !strings.Contains(err.Error(), "--http-body-window") || !strings.Contains(err.Error(), "must be >= 0") {
+		t.Fatalf("Parse: expected --http-body-window overflow error, got %v", err)
+	}
+}
+
+func TestParseRejectsInvalidLogFormat(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+		"--log-format", "xml",
+	})
+	if err == nil || !strings.Contains(err.Error(), "--log-format") {
+		t.Fatalf("Parse: expected --log-format error, got %v", err)
+	}
+}
+
+func TestParseLogFormatFlag(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	cfg, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+		"--log-format", "json",
+	})
+	if err != nil {
+		t.Fatalf("Parse: unexpected error: %v", err)
+	}
+	if cfg.LogFormat != "json" {
+		t.Fatalf("LogFormat = %q, want json", cfg.LogFormat)
+	}
+}
+
+func TestParseRejectsUnsupportedOtelMetricsScheme(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+		"--otel-metrics", "ftp://example.invalid/",
+	})
+	if err == nil || !strings.Contains(err.Error(), "--otel-metrics") {
+		t.Fatalf("Parse: expected --otel-metrics scheme error, got %v", err)
+	}
+}
+
+func TestParseAcceptsOtelMetrics(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	cfg, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+		"--otel-metrics", "http://localhost:9090/metrics",
+	})
+	if err != nil {
+		t.Fatalf("Parse: unexpected error: %v", err)
+	}
+	if cfg.OtelMetrics != "http://localhost:9090/metrics" {
+		t.Fatalf("OtelMetrics = %q, want http://localhost:9090/metrics", cfg.OtelMetrics)
+	}
+}
+
+func TestParseRejectsUnsupportedOtelTracesScheme(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+		"--otel-traces", "ftp://example.invalid/",
+	})
+	if err == nil || !strings.Contains(err.Error(), "--otel-traces") {
+		t.Fatalf("Parse: expected --otel-traces scheme error, got %v", err)
+	}
+}
+
+func TestParseAcceptsOtelTraces(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	cfg, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+		"--otel-traces", "stdout://",
+	})
+	if err != nil {
+		t.Fatalf("Parse: unexpected error: %v", err)
+	}
+	if cfg.OtelTraces != "stdout://" {
+		t.Fatalf("OtelTraces = %q, want stdout://", cfg.OtelTraces)
+	}
+}
+
+func TestParseRejectsOutOfRangeOtelSampleRatio(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+		"--otel-sample-ratio", "1.5",
+	})
+	if err == nil || !strings.Contains(err.Error(), "--otel-sample-ratio") {
+		t.Fatalf("Parse: expected --otel-sample-ratio range error, got %v", err)
+	}
+}
+
+func TestParseRejectsMalformedOtelSpoolMaxSize(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+		"--otel-spool-max-size", "notanumber",
+	})
+	if err == nil || !strings.Contains(err.Error(), "--otel-spool-max-size") {
+		t.Fatalf("Parse: expected --otel-spool-max-size parse error, got %v", err)
+	}
+}
+
+func TestParseRejectsZeroOtelSpoolMaxSize(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+		"--otel-spool-max-size", "0",
+	})
+	if err == nil || !strings.Contains(err.Error(), "--otel-spool-max-size") {
+		t.Fatalf("Parse: expected --otel-spool-max-size must-be->0 error, got %v", err)
+	}
+}
+
+func TestParseRejectsZeroOtelSpoolMaxAge(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+		"--otel-spool-max-age", "0s",
+	})
+	if err == nil || !strings.Contains(err.Error(), "--otel-spool-max-age") {
+		t.Fatalf("Parse: expected --otel-spool-max-age must-be->0 error, got %v", err)
+	}
+}
+
+func TestParseRejectsInvalidTrustedProxiesEntry(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+		"--trusted-proxies", "not-an-ip",
+	})
+	if err == nil || !strings.Contains(err.Error(), "--trusted-proxies") {
+		t.Fatalf("Parse: expected --trusted-proxies error, got %v", err)
 	}
 }

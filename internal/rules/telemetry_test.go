@@ -80,6 +80,33 @@ func TestRuleEngine_RecordsCompileMetricsAndSpanOnFirstLoad(t *testing.T) {
 	}
 }
 
+// TestRuleEngine_DefaultTable_RecordsSpan verifies lookupDefaultTable's
+// own tracer wiring — a "rules.compile" child span on the default-table
+// compile path, independent of TestRuleEngine_RecordsCompileMetricsAndSpanOnFirstLoad's
+// per-client one.
+func TestRuleEngine_DefaultTable_RecordsSpan(t *testing.T) {
+	store := NewRuleStore(testStorage(t, t.TempDir()))
+	ctx := context.Background()
+	if err := store.SaveDefault(ctx, []byte(`{"0.0.0.0/0":{"http":[]},"::/0":{"http":[]}}`)); err != nil {
+		t.Fatal(err)
+	}
+
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	defer tp.Shutdown(ctx)
+
+	engine := NewRuleEngine(store, WithTracer(tp.Tracer("test")))
+	client := netip.MustParseAddr("203.0.113.90")
+	if _, err := engine.Lookup(ctx, client); err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+
+	spans := exporter.GetSpans()
+	if len(spans) != 1 || spans[0].Name != "rules.compile" {
+		t.Fatalf("spans = %v, want a single \"rules.compile\" span for the default-table compile", spans)
+	}
+}
+
 func TestRuleEngine_CachedLookupDoesNotRecompile(t *testing.T) {
 	store := NewRuleStore(testStorage(t, t.TempDir()))
 	ctx := context.Background()

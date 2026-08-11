@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"mitmania/internal/flowsink"
 	"mitmania/internal/rules"
 	"mitmania/internal/session"
 	"mitmania/internal/storage"
@@ -203,6 +204,276 @@ func TestHTTP1Handler_ServesCAPEM(t *testing.T) {
 	}
 }
 
+// TestHTTP1Handler_CAPEMDisabledGives404 covers writeCAPEM's nil branch
+// (and, transitively, writeSimpleResponse — otherwise entirely untested):
+// a node with no CAPEM configured (CAPEM disables the self-directed
+// endpoint entirely, per its own doc comment) must answer GET /ca.pem with
+// a plain 404, not serve a stale/empty cert or crash.
+func TestHTTP1Handler_CAPEMDisabledGives404(t *testing.T) {
+	handler, _ := newHappyPathHandler(t)
+	handler.CAPEM = nil
+	proxyAddr := runProxy(t, handler)
+
+	resp, err := http.Get("http://" + proxyAddr + "/ca.pem")
+	if err != nil {
+		t.Fatalf("GET /ca.pem: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "Not Found\n" {
+		t.Fatalf("body = %q, want %q", body, "Not Found\n")
+	}
+	if got := resp.Header.Get("Content-Type"); got != "text/plain" {
+		t.Fatalf("Content-Type = %q, want text/plain", got)
+	}
+}
+
+// TestHTTP1Handler_FlowCountersTrackConnectionsAndRequests covers the
+// h.Flow != nil branches in Serve and handleOneRequest: with a real
+// flowsink.Counters attached, a single request/response round trip must be
+// reflected in its counters (conns accepted, conns no longer active,
+// requests served) — the only real FlowSink implementation, backing the
+// control API's /stats.
+func TestHTTP1Handler_FlowCountersTrackConnectionsAndRequests(t *testing.T) {
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "ok")
+	}))
+	defer origin.Close()
+
+	handler, _ := newHappyPathHandler(t)
+	counters := &flowsink.Counters{}
+	handler.Flow = counters
+	proxyAddr := runProxy(t, handler)
+	target := origin.Listener.Addr().String()
+	host, _, _ := net.SplitHostPort(target)
+
+	// A raw tunnel closed explicitly, rather than an http.Client (which
+	// pools/keeps the proxy connection alive for reuse) — ConnsActive only
+	// drops once the proxy's client-facing TCP connection actually closes,
+	// so a pooled connection would never let this test observe that.
+	tunnel := connectThroughProxy(t, proxyAddr, target)
+	tlsConn := tls.Client(tunnel, &tls.Config{ServerName: host, InsecureSkipVerify: true})
+	if err := tlsConn.Handshake(); err != nil {
+		t.Fatalf("TLS handshake: %v", err)
+	}
+	req, _ := http.NewRequest(http.MethodGet, "https://"+target+"/", nil)
+	if err := req.Write(tlsConn); err != nil {
+		t.Fatalf("req.Write: %v", err)
+	}
+	resp, err := http.ReadResponse(bufio.NewReader(tlsConn), req)
+	if err != nil {
+		t.Fatalf("ReadResponse: %v", err)
+	}
+	io.ReadAll(resp.Body)
+	resp.Body.Close()
+	tunnel.Close()
+
+	deadline := time.Now().Add(2 * time.Second)
+	var snap flowsink.Snapshot
+	for time.Now().Before(deadline) {
+		snap = counters.Snapshot()
+		if snap.ConnsAccepted >= 1 && snap.Requests >= 1 && snap.ConnsActive == 0 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if snap.ConnsAccepted < 1 {
+		t.Errorf("ConnsAccepted = %d, want >= 1", snap.ConnsAccepted)
+	}
+	if snap.Requests < 1 {
+		t.Errorf("Requests = %d, want >= 1", snap.Requests)
+	}
+	if snap.ConnsActive != 0 {
+		t.Errorf("ConnsActive = %d, want 0 (the connection closed with the response)", snap.ConnsActive)
+	}
+}
+
+// TestHTTP1Handler_MissingHostHeaderInTunnel_Misdirected covers
+// requestURL's host=="" fallback (falling back to connIn.Host for logging)
+// together with handleOneRequest's misdirected-authority rejection: an
+// HTTP/1.0 request with no Host header at all inside an already-established
+// mitm:true tunnel has an empty req.Host, which can never satisfy
+// authorityMatches — this must render as 421, not panic or misattribute the
+// request to the tunnel's own authority.
+func TestHTTP1Handler_MissingHostHeaderInTunnel_Misdirected(t *testing.T) {
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("origin was reached; a request with no Host header should have been rejected as misdirected")
+	}))
+	defer origin.Close()
+	target := origin.Listener.Addr().String()
+	host, _, _ := net.SplitHostPort(target)
+
+	handler, _ := newHappyPathHandler(t)
+	proxyAddr := runProxy(t, handler)
+
+	tunnel := connectThroughProxy(t, proxyAddr, target)
+	defer tunnel.Close()
+	tlsConn := tls.Client(tunnel, &tls.Config{ServerName: host, InsecureSkipVerify: true})
+	if err := tlsConn.Handshake(); err != nil {
+		t.Fatalf("TLS handshake: %v", err)
+	}
+
+	if _, err := io.WriteString(tlsConn, "GET / HTTP/1.0\r\n\r\n"); err != nil {
+		t.Fatalf("write request: %v", err)
+	}
+	resp, err := http.ReadResponse(bufio.NewReader(tlsConn), &http.Request{Method: http.MethodGet})
+	if err != nil {
+		t.Fatalf("ReadResponse: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMisdirectedRequest {
+		t.Fatalf("status = %d, want 421", resp.StatusCode)
+	}
+}
+
+// TestServeAbsoluteForm_DNSFailure is the absolute-form twin of
+// TestServeConnect_DNSFailure_ConnectResponseCarries523 (errpages_test.go):
+// same resolve-phase failure, different error-delivery mechanic (a direct
+// response instead of a CONNECT response).
+func TestServeAbsoluteForm_DNSFailure(t *testing.T) {
+	handler, caPEM := newHappyPathHandler(t)
+	proxyAddr := runProxy(t, handler)
+	client := proxyHTTPClient(t, proxyAddr, caPEM)
+
+	resp, err := client.Get("http://this-host-does-not-exist.invalid/")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 523 {
+		t.Fatalf("status = %d, want 523 (Origin Is Unreachable)", resp.StatusCode)
+	}
+}
+
+// TestHTTP1Handler_ResponseStatusAndBodyOverride covers the
+// rri.StatusOverride/rri.BodyOverride branches: status.set and body.replace
+// are the only response-phase actions that stage a full replacement rather
+// than mutating headers in place, so the client must see the overridden
+// status/body — including a recomputed Content-Length — not the origin's
+// own.
+func TestHTTP1Handler_ResponseStatusAndBodyOverride(t *testing.T) {
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "original body from origin")
+	}))
+	defer origin.Close()
+
+	ruleJSON := `{"http":[{"match":{},
+	  "response":[
+	    {"action":"status.set","params":{"status":201}},
+	    {"action":"body.replace","params":{"body":"replaced body"}}
+	  ]
+	}]}`
+	handler, caPEM := newTestHandler(t, ruleJSON)
+	proxyAddr := runProxy(t, handler)
+	client := proxyHTTPClient(t, proxyAddr, caPEM)
+
+	resp, err := client.Get(origin.URL + "/")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want 201 (status.set override)", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "replaced body" {
+		t.Fatalf("body = %q, want %q (body.replace override)", body, "replaced body")
+	}
+	if got := resp.ContentLength; got != int64(len("replaced body")) {
+		t.Fatalf("ContentLength = %d, want %d (recomputed for the replacement body)", got, len("replaced body"))
+	}
+}
+
+// TestServeConnect_ClientRejectsRealCert_HandshakeFails covers
+// terminateFailed's PhaseHandshake branch: Terminate's upstream dial and
+// cert clone both succeed, but the client's own handshake fails (here,
+// because the client doesn't trust mitmania's root CA at all) — at that
+// point the client's TLS record-layer state may already be desynced, so
+// terminateFailed must NOT attempt anything further (no fallback handshake
+// on a connection whose TLS state is unknown), just log and end the
+// connection. This is the "a client that won't trust our leaf" security
+// case: the proxy must fail closed, not retry with a different cert over
+// the same possibly-desynced connection.
+func TestServeConnect_ClientRejectsRealCert_HandshakeFails(t *testing.T) {
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("origin was reached; the client-side handshake should have failed first")
+	}))
+	defer origin.Close()
+	target := origin.Listener.Addr().String()
+	host, _, _ := net.SplitHostPort(target)
+
+	handler, _ := newHappyPathHandler(t) // deliberately NOT using this handler's own CA below
+	proxyAddr := runProxy(t, handler)
+
+	tunnel := connectThroughProxy(t, proxyAddr, target)
+	defer tunnel.Close()
+	// No RootCAs supplied and InsecureSkipVerify left false: the client
+	// will reject mitmania's cloned leaf as untrusted, same as any real
+	// browser that never installed the CA.
+	tlsConn := tls.Client(tunnel, &tls.Config{ServerName: host})
+	if err := tlsConn.Handshake(); err == nil {
+		tlsConn.Close()
+		t.Fatalf("client handshake unexpectedly succeeded against an untrusted cert")
+	}
+}
+
+// TestServeConnect_TLSDialFail_ClientRejectsFallbackCert_LogsFallbackFailed
+// covers terminateFailed's Fallback-itself-fails branch: the upstream
+// TLS dial fails (PhaseDial, clientConn still pristine — same setup as
+// errpages_test.go's TestServeConnect_TLSHandshakeFail_ServesFallbackPage),
+// so a fallback handshake is attempted; but the client, again, doesn't
+// trust mitmania's root CA, so even the fallback handshake fails. The
+// connection must simply end — no infinite retry, no plaintext fallback,
+// no page served over an untrusted channel.
+func TestServeConnect_TLSDialFail_ClientRejectsFallbackCert_LogsFallbackFailed(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			c.Close() // never speaks TLS — forces a PhaseDial failure
+		}
+	}()
+
+	handler, _ := newHappyPathHandler(t)
+	proxyAddr := runProxy(t, handler)
+
+	target := ln.Addr().String()
+	host, _, err := net.SplitHostPort(target)
+	if err != nil {
+		t.Fatalf("SplitHostPort: %v", err)
+	}
+
+	resp, conn := rawConnect(t, proxyAddr, target)
+	defer conn.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("CONNECT status = %d, want 200 (probe should have succeeded)", resp.StatusCode)
+	}
+
+	tlsConn := tls.Client(conn, &tls.Config{ServerName: host}) // no RootCAs: rejects the fallback leaf too
+	tlsConn.SetDeadline(time.Now().Add(10 * time.Second))
+	if err := tlsConn.Handshake(); err == nil {
+		tlsConn.Close()
+		t.Fatalf("client handshake against the fallback cert unexpectedly succeeded")
+	}
+}
+
 func TestHTTP1Handler_AbsoluteFormPlainHTTP(t *testing.T) {
 	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "plain hello, path=%s", r.URL.Path)
@@ -227,6 +498,40 @@ func TestHTTP1Handler_AbsoluteFormPlainHTTP(t *testing.T) {
 	}
 	if want := "plain hello, path=/plain"; string(body) != want {
 		t.Fatalf("body = %q, want %q", body, want)
+	}
+}
+
+// TestReadBoundedRequest_MalformedStartLine covers readBoundedRequest's
+// http.ReadRequest failure branch specifically — distinct from the
+// HeaderLimit trip (TestReadBoundedRequest_OversizedHeaders_SquidPage):
+// here the header block is well within limit and properly terminated by a
+// blank line, so boundNextHeaderBlock succeeds, but the bytes inside it
+// aren't a parseable HTTP request line at all.
+func TestReadBoundedRequest_MalformedStartLine(t *testing.T) {
+	handler, _ := newHappyPathHandler(t)
+	proxyAddr := runProxy(t, handler)
+
+	conn, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	if _, err := io.WriteString(conn, "NOT A REQUEST LINE\r\n\r\n"); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+	if err != nil {
+		t.Fatalf("ReadResponse: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "ERR_INVALID_REQ") {
+		t.Fatalf("body missing ERR_INVALID_REQ: %s", body)
 	}
 }
 
@@ -409,6 +714,52 @@ func TestHTTP1Handler_NoMatchGives511(t *testing.T) {
 	}
 }
 
+// TestHTTP1Handler_MessagePhaseNoMatchGives511 covers handleOneRequest's own
+// no-match branch specifically (distinct from serveConnect's connection-
+// phase no-match, already covered by TestHTTP1Handler_NoMatchGives511): a
+// rule can match at the connection phase (host/port/proto — enough to
+// authorize mitm:true and open the tunnel) while still not matching a
+// given request's path/method at the message phase. That must fail closed
+// with the same 511 as an outright connection-phase no-match, not silently
+// forward an unauthorized request just because the tunnel itself was
+// allowed.
+func TestHTTP1Handler_MessagePhaseNoMatchGives511(t *testing.T) {
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("origin was reached; the message-phase no-match should have short-circuited before forwarding")
+	}))
+	defer origin.Close()
+	target := origin.Listener.Addr().String()
+	host, _, _ := net.SplitHostPort(target)
+
+	ruleJSON := `{"http":[{"match":{"path":"/allowed"}}]}`
+	handler, _ := newTestHandler(t, ruleJSON)
+	proxyAddr := runProxy(t, handler)
+
+	tunnel := connectThroughProxy(t, proxyAddr, target)
+	defer tunnel.Close()
+	tlsConn := tls.Client(tunnel, &tls.Config{ServerName: host, InsecureSkipVerify: true})
+	if err := tlsConn.Handshake(); err != nil {
+		t.Fatalf("TLS handshake: %v", err)
+	}
+
+	req, _ := http.NewRequest(http.MethodGet, "https://"+target+"/not-allowed", nil)
+	if err := req.Write(tlsConn); err != nil {
+		t.Fatalf("req.Write: %v", err)
+	}
+	resp, err := http.ReadResponse(bufio.NewReader(tlsConn), req)
+	if err != nil {
+		t.Fatalf("ReadResponse: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNetworkAuthenticationRequired {
+		t.Fatalf("status = %d, want 511", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "ERR_ACCESS_DENIED") {
+		t.Fatalf("body does not look like the Squid no-match page:\n%s", body)
+	}
+}
+
 // TestHTTP1Handler_MitmFalseSplice asserts that a mitm:false rule bypasses
 // TLS termination entirely: the client must see the origin's own real
 // certificate, never a mitmania-signed clone.
@@ -449,6 +800,119 @@ func TestHTTP1Handler_MitmFalseSplice(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	if string(body) != "raw origin response" {
 		t.Fatalf("body = %q, want raw origin response", body)
+	}
+}
+
+// closeAfterOneRequestHandler answers exactly one request with a normal,
+// well-formed keep-alive-shaped response (no Connection: close — nothing
+// about the response itself signals the socket is about to die), then
+// forcibly closes the raw connection — simulating an origin's own idle
+// timeout severing the connection between a proxy's keep-alive requests,
+// entirely independent of anything the client/proxy did.
+func closeAfterOneRequestHandler(w http.ResponseWriter, r *http.Request) {
+	hj, ok := w.(http.Hijacker)
+	if !ok {
+		http.Error(w, "hijack not supported", http.StatusInternalServerError)
+		return
+	}
+	conn, _, err := hj.Hijack()
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+	body := fmt.Sprintf("response for %s", r.URL.Path)
+	fmt.Fprintf(conn, "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s", len(body), body)
+}
+
+// TestHTTP1Handler_H1UpstreamReconnectsAfterOriginClosesConnection is a
+// regression/behavior test for h1RoundTripper's redial logic (roundtrip.go)
+// wired through the real CONNECT/mitm:true path (http1.go's own redial
+// closure, "return dialer.DialTLS(...)"): the proxy's upstream connection to
+// origin is shared across every keep-alive request on the client's tunnel,
+// and an origin can silently close its end between requests (idle timeout,
+// among other things) with no signal to the proxy beyond the next write/read
+// failing. A GET is idempotent, so the proxy must transparently redial and
+// complete the second request rather than surfacing an error to the client
+// for a purely origin-side hiccup.
+func TestHTTP1Handler_H1UpstreamReconnectsAfterOriginClosesConnection(t *testing.T) {
+	origin := httptest.NewTLSServer(http.HandlerFunc(closeAfterOneRequestHandler))
+	defer origin.Close()
+
+	handler, _ := newHappyPathHandler(t)
+	proxyAddr := runProxy(t, handler)
+	target := origin.Listener.Addr().String()
+	host, _, _ := net.SplitHostPort(target)
+
+	tunnel := connectThroughProxy(t, proxyAddr, target)
+	defer tunnel.Close()
+	tlsConn := tls.Client(tunnel, &tls.Config{ServerName: host, InsecureSkipVerify: true})
+	if err := tlsConn.Handshake(); err != nil {
+		t.Fatalf("TLS handshake: %v", err)
+	}
+	br := bufio.NewReader(tlsConn)
+
+	for i, path := range []string{"/first", "/second"} {
+		req, _ := http.NewRequest(http.MethodGet, "https://"+target+path, nil)
+		if err := req.Write(tlsConn); err != nil {
+			t.Fatalf("GET #%d write: %v", i, err)
+		}
+		resp, err := http.ReadResponse(br, req)
+		if err != nil {
+			t.Fatalf("GET #%d ReadResponse: %v (the proxy should have transparently redialed to origin)", i, err)
+		}
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			t.Fatalf("GET #%d ReadAll: %v", i, err)
+		}
+		want := "response for " + path
+		if string(body) != want {
+			t.Fatalf("GET #%d body = %q, want %q", i, body, want)
+		}
+	}
+}
+
+// TestHTTP1Handler_AbsoluteFormRedialsAfterOriginClosesConnection is
+// TestHTTP1Handler_H1UpstreamReconnectsAfterOriginClosesConnection's
+// absolute-form (plain HTTP, mitm not involved at all) twin — covers the
+// same h1RoundTripper redial path reached through serveAbsoluteForm's own
+// redial closure instead of serveConnect's.
+func TestHTTP1Handler_AbsoluteFormRedialsAfterOriginClosesConnection(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(closeAfterOneRequestHandler))
+	defer origin.Close()
+
+	handler, _ := newHappyPathHandler(t)
+	proxyAddr := runProxy(t, handler)
+
+	proxyConn, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("Dial proxy: %v", err)
+	}
+	defer proxyConn.Close()
+	br := bufio.NewReader(proxyConn)
+
+	for i, path := range []string{"/first", "/second"} {
+		req, _ := http.NewRequest(http.MethodGet, origin.URL+path, nil)
+		// WriteProxy, not Write: this is a proxy request, so the request
+		// line needs the absolute-form target (scheme+host), not origin-form
+		// — otherwise the proxy can't tell what to look up requestURL.Host as
+		// and rejects it as a malformed request.
+		if err := req.WriteProxy(proxyConn); err != nil {
+			t.Fatalf("GET #%d write: %v", i, err)
+		}
+		resp, err := http.ReadResponse(br, req)
+		if err != nil {
+			t.Fatalf("GET #%d ReadResponse: %v (the proxy should have transparently redialed to origin)", i, err)
+		}
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			t.Fatalf("GET #%d ReadAll: %v", i, err)
+		}
+		want := "response for " + path
+		if string(body) != want {
+			t.Fatalf("GET #%d body = %q, want %q", i, body, want)
+		}
 	}
 }
 

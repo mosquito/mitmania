@@ -160,6 +160,46 @@ func TestLookupRequest_HeaderMatch(t *testing.T) {
 	}
 }
 
+// TestLookupRequest_SkipsConnMismatchedRuleThenNoMatch exercises
+// LookupRequest's own first-match loop skipping a rule whose
+// connection-phase predicate (host/port/proto) doesn't match at all —
+// distinct from a rule whose connection-phase predicate matches but
+// whose message-phase predicate doesn't — and falling off the end when
+// nothing at all matches.
+func TestLookupRequest_SkipsConnMismatchedRuleThenNoMatch(t *testing.T) {
+	compiled := mustCompile(t, `{
+	  "http": [
+	    { "match": { "host": "other.example.com" },
+	      "request": [ {"action":"block"} ] },
+	    { "match": { "host": "match.example.com", "path": "/only" },
+	      "request": [ {"action":"block"} ] }
+	  ]
+	}`)
+	rs := &RuleSet{rules: compiled}
+
+	_, ok := rs.LookupRequest(MsgInput{
+		ConnInput: ConnInput{Host: "match.example.com"},
+		Path:      "/nope",
+		Method:    "GET",
+		Header:    http.Header{},
+	})
+	if ok {
+		t.Fatalf("LookupRequest: unexpected match — neither rule's full predicate should match")
+	}
+}
+
+// TestRuleSet_HTTPRules verifies HTTPRules() exposes the same compiled
+// chain LookupConn/LookupRequest walk internally — control's PUT-time
+// outcall probe needs every rule's request[] actions regardless of
+// whether any of them would ever actually match at request time.
+func TestRuleSet_HTTPRules(t *testing.T) {
+	compiled := mustCompile(t, `{"http":[{"match":{"host":"x"}},{"match":{"host":"y"}}]}`)
+	rs := &RuleSet{rules: compiled}
+	if len(rs.HTTPRules()) != 2 {
+		t.Fatalf("HTTPRules() len = %d, want 2", len(rs.HTTPRules()))
+	}
+}
+
 func TestRuleEngine_LookupCompilesFromStore(t *testing.T) {
 	store := NewRuleStore(testStorage(t, t.TempDir()))
 	ctx := context.Background()
@@ -390,6 +430,105 @@ func TestRuleEngine_Lookup_DefaultTableHotReload(t *testing.T) {
 	}
 	if len(rs2.rules) != 1 {
 		t.Fatalf("rules len after on-disk change = %d, want 1", len(rs2.rules))
+	}
+}
+
+// TestRuleEngine_LookupIP_CompileFailurePropagates verifies a per-client
+// file that's valid JSON with a valid auth block but an invalid rule body
+// (here: an unparseable "re:" regex) fails Lookup via Compile, not just
+// via JSON parsing or auth compilation — the two failure modes already
+// covered elsewhere.
+func TestRuleEngine_LookupIP_CompileFailurePropagates(t *testing.T) {
+	store := NewRuleStore(testStorage(t, t.TempDir()))
+	ctx := context.Background()
+	client := netip.MustParseAddr("10.0.0.20")
+	if err := store.Save(ctx, client, []byte(`{"http":[{"match":{"host":"re:("}}]}`)); err != nil {
+		t.Fatal(err)
+	}
+
+	engine := NewRuleEngine(store)
+	if _, err := engine.Lookup(ctx, client); err == nil {
+		t.Fatalf("Lookup: expected a Compile error for an invalid regex")
+	}
+}
+
+// TestRuleEngine_HotReloadCompileFailure_FailsClosedWithoutServingStaleCache
+// verifies the hot-reload contract's failure mode: when a client's file
+// changes to something that no longer compiles, Lookup fails closed for
+// that call — it does NOT keep silently serving the last-good cached
+// RuleSet. A subsequent Lookup, once the file is fixed again, must still
+// recompile successfully — proving the failed attempt didn't corrupt or
+// freeze the cache entry into permanently retrying (or permanently
+// failing).
+func TestRuleEngine_HotReloadCompileFailure_FailsClosedWithoutServingStaleCache(t *testing.T) {
+	store := NewRuleStore(testStorage(t, t.TempDir()))
+	ctx := context.Background()
+	client := netip.MustParseAddr("10.0.0.21")
+	if err := store.Save(ctx, client, []byte(`{"http":[{"match":{}}]}`)); err != nil {
+		t.Fatal(err)
+	}
+
+	engine := NewRuleEngine(store)
+	rsGood, err := engine.Lookup(ctx, client)
+	if err != nil {
+		t.Fatalf("Lookup (good): %v", err)
+	}
+	if len(rsGood.rules) != 1 {
+		t.Fatalf("initial rules len = %d, want 1", len(rsGood.rules))
+	}
+
+	if err := store.Save(ctx, client, []byte(`not valid json`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.Lookup(ctx, client); err == nil {
+		t.Fatalf("Lookup (broken): expected an error, not a silently-served stale RuleSet")
+	}
+
+	if err := store.Save(ctx, client, []byte(`{"http":[]}`)); err != nil {
+		t.Fatal(err)
+	}
+	rsRecovered, err := engine.Lookup(ctx, client)
+	if err != nil {
+		t.Fatalf("Lookup (recovered): %v", err)
+	}
+	if len(rsRecovered.rules) != 0 {
+		t.Fatalf("recovered rules len = %d, want 0 (the fixed file's own content)", len(rsRecovered.rules))
+	}
+}
+
+// TestRuleEngine_LookupDefaultTable_ParseFailurePropagates verifies a
+// malformed rules/default blob (invalid JSON) fails Lookup for a client
+// falling back to it, mirroring the per-client
+// TestRuleEngine_RecordsCompileFailure case.
+func TestRuleEngine_LookupDefaultTable_ParseFailurePropagates(t *testing.T) {
+	store := NewRuleStore(testStorage(t, t.TempDir()))
+	ctx := context.Background()
+	if err := store.SaveDefault(ctx, []byte(`not valid json`)); err != nil {
+		t.Fatal(err)
+	}
+
+	engine := NewRuleEngine(store)
+	client := netip.MustParseAddr("203.0.113.80")
+	if _, err := engine.Lookup(ctx, client); err == nil {
+		t.Fatalf("Lookup: expected a parse error for malformed rules/default JSON")
+	}
+}
+
+// TestRuleEngine_LookupDefaultTable_CompileFailurePropagates verifies a
+// rules/default blob that parses fine but fails compileParsedEntries'
+// validation — here, a coverage gap (only a v4 bucket, no v6 one) — also
+// fails Lookup, distinct from a JSON parse failure.
+func TestRuleEngine_LookupDefaultTable_CompileFailurePropagates(t *testing.T) {
+	store := NewRuleStore(testStorage(t, t.TempDir()))
+	ctx := context.Background()
+	if err := store.SaveDefault(ctx, []byte(`{"0.0.0.0/0":{"http":[]}}`)); err != nil {
+		t.Fatal(err)
+	}
+
+	engine := NewRuleEngine(store)
+	client := netip.MustParseAddr("203.0.113.81")
+	if _, err := engine.Lookup(ctx, client); err == nil {
+		t.Fatalf("Lookup: expected a compile error for a v6 coverage gap")
 	}
 }
 

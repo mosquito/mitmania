@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -355,7 +356,18 @@ func TestH2RoundTripper_ReconnectsAfterStaleness(t *testing.T) {
 		t.Fatalf("newUpstreamH2ClientConn: %v", err)
 	}
 
-	rt := &h2RoundTripper{dialer: dialer, dst: dst, sni: host, connectTimeout: 5 * time.Second, connectTries: 3}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	defer tp.Shutdown(context.Background())
+
+	// log/tracer/readTimeout are all exercised here too (not just the
+	// reconnect itself): the reconnect log line, the tracer's
+	// "upstream.connect" reused=false span, and a generous readTimeout that
+	// should never actually fire (both RoundTrips complete well within it,
+	// so timer.Stop() succeeds — the common case, distinct from the
+	// timer-already-fired race).
+	rt := &h2RoundTripper{dialer: dialer, dst: dst, sni: host, connectTimeout: 5 * time.Second, connectTries: 3, readTimeout: 5 * time.Second, log: log, tracer: tp.Tracer("test")}
 	rt.seed(cc, upConn)
 	defer rt.Close()
 
@@ -389,6 +401,70 @@ func TestH2RoundTripper_ReconnectsAfterStaleness(t *testing.T) {
 	resp2.Body.Close()
 	if string(body2) != "ok /second" {
 		t.Fatalf("body #2 = %q", body2)
+	}
+}
+
+// TestH2RoundTripper_ReconnectDialFails_RoundTripReturnsError is
+// TestH2RoundTripper_ReconnectsAfterStaleness's failure twin: the existing
+// connection goes stale exactly the same way, but this time the origin
+// itself is gone by the time currentConn tries to redial, so the reconnect
+// dial fails too. RoundTrip must surface that dial error directly, not
+// hang or panic — and rt must be left with no cached connection, so the
+// NEXT RoundTrip attempt (once the origin is back) tries a fresh dial
+// again rather than reusing a known-broken cc/upConn pair.
+func TestH2RoundTripper_ReconnectDialFails_RoundTripReturnsError(t *testing.T) {
+	origin := newH2TestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "ok")
+	})
+	dst := origin.Listener.Addr().String()
+	host, _, err := net.SplitHostPort(dst)
+	if err != nil {
+		t.Fatalf("SplitHostPort: %v", err)
+	}
+
+	dialer := NewUpstreamDialer(500*time.Millisecond, 1)
+	cc, upConn, err := newUpstreamH2ClientConn(context.Background(), dialer, nil, dst, host, 1, 500*time.Millisecond, 64<<10, nil)
+	if err != nil {
+		t.Fatalf("newUpstreamH2ClientConn: %v", err)
+	}
+
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	defer tp.Shutdown(context.Background())
+
+	rt := &h2RoundTripper{dialer: dialer, dst: dst, sni: host, connectTimeout: 500 * time.Millisecond, connectTries: 1, log: slog.New(slog.NewTextHandler(io.Discard, nil)), tracer: tp.Tracer("test")}
+	rt.seed(cc, upConn)
+	defer rt.Close()
+
+	// A warm-up round trip first, same as the success-case test above —
+	// an entirely unused ClientConn's internal read loop hasn't
+	// necessarily synced with the server yet, so CanTakeNewRequest() can
+	// still (harmlessly) read stale-true for a moment after Close() without
+	// ever having actually talked to the server first.
+	warmReq, _ := http.NewRequest(http.MethodGet, "https://"+host+"/warm", nil)
+	warmResp, err := rt.RoundTrip(warmReq)
+	if err != nil {
+		t.Fatalf("warm-up RoundTrip: %v", err)
+	}
+	io.ReadAll(warmResp.Body)
+	warmResp.Body.Close()
+
+	cc.Close() // same staleness trigger as the success-case test above
+	if cc.CanTakeNewRequest() {
+		t.Fatalf("test setup: cc should be unusable after Close")
+	}
+	origin.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, "https://"+host+"/", nil)
+	if _, err := rt.RoundTrip(req); err == nil {
+		t.Fatalf("RoundTrip succeeded despite the origin being gone")
+	}
+
+	rt.mu.Lock()
+	stillCached := rt.cc != nil
+	rt.mu.Unlock()
+	if stillCached {
+		t.Fatalf("rt kept a cached ClientConn after a failed reconnect")
 	}
 }
 
