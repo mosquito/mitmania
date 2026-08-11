@@ -5,7 +5,7 @@ Every flag has an automatically derived `MITMANIA_*` environment variable; a com
 | Area | Flags |
 | --- | --- |
 | Shared state | `-s, --storage`; `-k, --cluster-key`; `-c, --control` |
-| Listeners | `--listen-http-proxy`; `--listen-https-proxy`; reserved transparent listener flags |
+| Listeners | `--listen-http-proxy`; `--listen-https-proxy`; `--listen-http-tproxy`; `--listen-http-redirect` (transparent, Linux-only) |
 | HTTP bounds | `--http-header-limit` (`64k`); `--http-body-window` (`64k`) |
 | HTTP/1 timeouts | `--http-timeout-connect`; `--http-timeout-read`; `--http-connect-tries` |
 | HTTP/2 timeouts | `--http2-timeout-connect`; `--http2-timeout-read`; `--http2-connect-tries` |
@@ -17,5 +17,5 @@ Every flag has an automatically derived `MITMANIA_*` environment variable; a com
 Address values are URL-like: `tcp://HOST:PORT` or `unix:///path`; `*` means all IPv4 and IPv6 interfaces. `clusterKey` is base64 and must decode to at least 32 bytes. When `XDG_RUNTIME_DIR` is unset, supply `--control` explicitly.
 
 !!! note "Applies to v1"
-    The transparent TPROXY and REDIRECT flags appear in help but are not implemented. A zero-data-listener configuration fails at startup.
+    At least one data listener is required; a configuration with none of the four listener flags set fails at startup. `--listen-http-tproxy`/`--listen-http-redirect` are Linux-only and reject a `unix://` address (see [the FAQ](../faq.md) for why).
 

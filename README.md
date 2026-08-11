@@ -87,7 +87,7 @@ On first start mitmania writes an encrypted `ca.p12` and a safe, deny-first defa
 
 ## Status
 
-**v1**: HTTP/1.1 + HTTPS MITM (+ WebSocket) and HTTP/2, explicit-proxy mode, cert cloning with deterministic keys, pluggable `Storage` (`posix://`/`s3://`), rule engine + egress policy, control socket, OpenTelemetry. Transparent REDIRECT/TPROXY flags appear in `--help` but are **not yet implemented**. SSH, IMAP, HTTP/3, and additional storage backends are design-space notes, not shipped.
+**v1**: HTTP/1.1 + HTTPS MITM (+ WebSocket) and HTTP/2, explicit and transparent (REDIRECT/TPROXY, Linux-only) proxy modes, cert cloning with deterministic keys, pluggable `Storage` (`posix://`/`s3://`), rule engine + egress policy, control socket, OpenTelemetry. SSH, IMAP, HTTP/3, and additional storage backends are design-space notes, not shipped.
 
 ## Documentation
 

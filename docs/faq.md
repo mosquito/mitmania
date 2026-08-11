@@ -26,5 +26,5 @@ PUT also compiles patterns and actions, validates auth/egress, checks complete d
 
 ## Why won't a transparent listener start?
 
-REDIRECT and TPROXY are not implemented in the current binary. Use the explicit listener until a release marks those transports shipped.
+`--listen-http-tproxy`/`--listen-http-redirect` are Linux-only (`SO_ORIGINAL_DST` and `IP_TRANSPARENT` have no portable equivalent); on any other platform the binary reports which one at startup rather than silently ignoring the flag. Both also reject a `unix://` address outright — REDIRECT/TPROXY are IP-routing concepts with no meaningful destination to recover over a Unix socket. On Linux with a `tcp://` address, a listener that still won't bind is almost always the kernel-side setup, not mitmania: for TPROXY, `IP_TRANSPARENT` needs `CAP_NET_ADMIN`; for either, the actual traffic redirection is entirely the operator's own nftables/`ip rule` responsibility (see [transparent interception](usecases/transparent.md)) — mitmania only ever sees what the kernel hands it.
 

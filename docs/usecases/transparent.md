@@ -1,11 +1,14 @@
 # Transparent interception with REDIRECT or TPROXY
 
-!!! warning "Design-space, not shipped"
-    The current binary exposes the transparent listener flags, but both listeners still fail startup as not implemented. These examples document the intended deployment contract so operators can review the topology; they are not currently deployable.
-
 **Who and why:** operators need to govern containers, VMs, appliances, or agents that cannot be configured with an explicit HTTP proxy—or that must not be able to opt out by clearing proxy environment variables.
 
 **MITM required?** No for connection and resolved-address policy; yes when HTTPS method, path, headers, bodies, injection, or broker decisions must be visible. A `mitm:false` rule remains an end-to-end TLS splice.
+
+## Domain-based matching without a CONNECT authority
+
+A transparent connection carries no CONNECT/absolute-form authority to read `host` from — only the destination IP:port the Acceptor recovered. To still match rules on domain, mitmania peeks the traffic itself before any rule runs: the TLS ClientHello's SNI for HTTPS, or the request's `Host` header for plaintext HTTP, in both cases *before* connection-phase matching rather than after (the reverse of the explicit CONNECT path, which already knows its host and only peeks afterward to catch an SNI/authority mismatch).
+
+A client that sends no SNI at all (permitted by TLS, though rare in practice) has no domain to match on — the destination's literal IP is used as `host` instead, the same fallback `mitm:false`'s literal-IP dial path already uses elsewhere.
 
 ## Choose a transport
 

@@ -1,9 +1,6 @@
 # Transparent interception with nftables
 
-!!! warning "Design-space, not shipped"
-    The current binary exposes `--listen-http-redirect` and `--listen-http-tproxy` for compatibility with the v1 design, but startup reports these transports as not implemented. Do not deploy the nftables rules below yet.
-
-Choose REDIRECT for simple destination-NAT steering, or TPROXY when the listener must retain transparent socket semantics. Both examples scope capture to traffic arriving from `docker0`, which keeps locally originated mitmania upstream connections out of the rule.
+Choose REDIRECT for simple destination-NAT steering, or TPROXY when the listener must retain transparent socket semantics. Both examples scope capture to traffic arriving from `docker0`, which keeps locally originated mitmania upstream connections out of the rule — scoping to the ingress interface, not just the destination port, is what actually prevents mitmania's own outbound connection to the real origin from being recaptured and redirected back to itself.
 
 === "REDIRECT"
 
@@ -54,4 +51,4 @@ For IPv6 TPROXY, mirror the nftables rule in an `ip6` table and add `ip -6 rule 
 !!! danger "Security"
     Scope capture to the workload boundary and block direct egress there. A broad host-wide rule can recapture the proxy's own upstream connections, create loops, or intercept management traffic.
 
-Once the listener ships, this tutorial will cover loop prevention, CA installation in the intercepted container, an effective MITM rule, and a decrypted access-log check. Until then, use the [explicit proxy setup](../start/point-client.md).
+Next: install [the CA](../start/trust-ca.md) in the intercepted container to add MITM rules, or continue with [the explicit proxy setup](../start/point-client.md) for a simpler non-transparent deployment.

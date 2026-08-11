@@ -251,6 +251,16 @@ func (h *Http1Handler) Serve(ctx context.Context, sess session.Session, dialer U
 		defer h.Flow.ConnClosed()
 	}
 
+	// A transparent (TPROXY/REDIRECT) session has no CONNECT/absolute-form
+	// request carrying its destination authority to parse in the first
+	// place — sess.Dst is already the real destination, and serveTransparent
+	// starts by peeking the traffic itself instead. Explicit sessions are
+	// unaffected: this branch is new, everything below it is unchanged.
+	if sess.Transport != session.TransportExplicit {
+		h.serveTransparent(ctx, sess, dialer)
+		return
+	}
+
 	ctx, treq := h.startReq(ctx, "h1", "", "")
 	stream := newPrependConn(sess.Conn)
 	sess.Conn = stream
@@ -401,8 +411,7 @@ func (h *Http1Handler) serveConnect(ctx context.Context, sess session.Session, b
 
 	tunnel := drainBuffered(br, conn)
 	if !mitm {
-		h.logAccess(sess, http.MethodConnect, reqURL, "splice (mitm:false)", 0, treq)
-		rawSplice(ctx, tunnel, dialer, dst)
+		h.serveTunnel(ctx, sess, tunnel, dialer, dst, "", connIn, mitm, http.MethodConnect, reqURL, treq, principal)
 		return
 	}
 
@@ -428,9 +437,33 @@ func (h *Http1Handler) serveConnect(ctx context.Context, sess session.Session, b
 		return
 	}
 
-	result, err := h.TLS.Terminate(ctx, replayed, dialer, dst, sni)
+	h.serveTunnel(ctx, sess, replayed, dialer, dst, sni, connIn, mitm, http.MethodConnect, reqURL, treq, principal)
+}
+
+// serveTunnel is the shared post-decision core of a CONNECT-style tunnel:
+// mitm is already decided and dst already pinned by the caller, and
+// tunnel is a net.Conn ready to read from (any bytes the caller already
+// consumed to get here — an HTTP CONNECT line, a peeked ClientHello —
+// must already be replayed onto it). For mitm:false it splices raw; for
+// mitm:true it terminates TLS and relays h1/h2, using sni for cert
+// cloning.
+//
+// Shared by serveConnect (explicit CONNECT: sni comes from its own
+// PeekClientHello call plus an SNI-vs-CONNECT-host consistency check
+// above) and the transparent path in transparent.go (sni comes from
+// deriving connIn.Host in the first place — there's no separate
+// CONNECT authority to cross-check it against, so no second peek or
+// consistency check is needed there).
+func (h *Http1Handler) serveTunnel(ctx context.Context, sess session.Session, tunnel net.Conn, dialer UpstreamDialer, dst, sni string, connIn rules.ConnInput, mitm bool, method, reqURL string, treq reqTrace, principal string) {
+	if !mitm {
+		h.logAccess(sess, method, reqURL, "splice (mitm:false)", 0, treq)
+		rawSplice(ctx, tunnel, dialer, dst)
+		return
+	}
+
+	result, err := h.TLS.Terminate(ctx, tunnel, dialer, dst, sni)
 	if err != nil {
-		h.terminateFailed(ctx, sess, replayed, sni, reqURL, treq, err)
+		h.terminateFailed(ctx, sess, tunnel, sni, reqURL, treq, err)
 		return
 	}
 
@@ -457,7 +490,7 @@ func (h *Http1Handler) serveConnect(ctx context.Context, sess session.Session, b
 			spec := classifyTerminateDialErr(err)
 			httperror.WriteResponse(result.Client, reqURL, spec)
 			result.Client.Close()
-			h.logAccessErr(sess, http.MethodConnect, reqURL, "h2-connect-fail", spec.Status, treq, err)
+			h.logAccessErr(sess, method, reqURL, "h2-connect-fail", spec.Status, treq, err)
 			return
 		}
 		roundTripper := &h2RoundTripper{dialer: dialer, dst: dst, sni: sni, connectTimeout: h.HTTP2ConnectTimeout, connectTries: h.HTTP2ConnectTries, maxHeaderListSize: h.HeaderLimit, readTimeout: h.HTTP2ReadTimeout, log: h.Logger, metrics: h.Metrics, tracer: h.Tracer}
