@@ -393,6 +393,76 @@ func TestRuleEngine_Lookup_DefaultTableHotReload(t *testing.T) {
 	}
 }
 
+// TestRuleEngine_Lookup_ConvergesAcrossIndependentNodes proves the core
+// distributed-operation claim: a rule change written through one node's
+// Store becomes visible to a second, completely independent RuleEngine
+// sharing only the same on-disk Storage — no direct communication
+// between the two, exactly as two real fleet nodes only ever share
+// Storage. Unlike TestRuleEngine_Lookup_DefaultTableHotReload, this uses
+// two separate Storage clients and two separate engines, so a single
+// shared engine's own cache can't be the reason a change is visible.
+func TestRuleEngine_Lookup_ConvergesAcrossIndependentNodes(t *testing.T) {
+	dir := t.TempDir()
+	ctx := context.Background()
+	client := netip.MustParseAddr("203.0.113.9")
+
+	// Two independent Storage clients over the SAME directory — exactly
+	// as two real node processes pointed at the same posix:// URL would
+	// each open their own client.
+	storeA := NewRuleStore(testStorage(t, dir))
+	storeB := NewRuleStore(testStorage(t, dir))
+	engineA := NewRuleEngine(storeA)
+	engineB := NewRuleEngine(storeB)
+
+	rsB, err := engineB.Lookup(ctx, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rsB.rules) != 0 {
+		t.Fatalf("initial rules on node B = %d, want 0", len(rsB.rules))
+	}
+
+	// Node A alone receives the write (its control API PUT, simulated
+	// here as a direct Store.Save) — node B's store/engine never touch
+	// it.
+	if err := storeA.Save(ctx, client, []byte(`{"http":[{"match":{}}]}`)); err != nil {
+		t.Fatal(err)
+	}
+	rsB, err = engineB.Lookup(ctx, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rsB.rules) != 1 {
+		t.Fatalf("rules on node B after node A's write = %d, want 1", len(rsB.rules))
+	}
+
+	// Node A revokes; node B converges on the revocation too, not just
+	// the initial write.
+	if err := storeA.Save(ctx, client, []byte(`{"http":[]}`)); err != nil {
+		t.Fatal(err)
+	}
+	rsB, err = engineB.Lookup(ctx, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rsB.rules) != 0 {
+		t.Fatalf("rules on node B after node A's revoke = %d, want 0", len(rsB.rules))
+	}
+
+	// Confirm symmetry, not just A -> B: node A converges on a write
+	// made only through node B.
+	if err := storeB.Save(ctx, client, []byte(`{"http":[{"match":{}}]}`)); err != nil {
+		t.Fatal(err)
+	}
+	rsA, err := engineA.Lookup(ctx, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rsA.rules) != 1 {
+		t.Fatalf("rules on node A after node B's write = %d, want 1", len(rsA.rules))
+	}
+}
+
 // TestRuleSet_Auth_NilWhenNoAuthBlock verifies a file with no "auth" key
 // compiles to a nil Auth() — the default: source IP alone is identity,
 // no credential gate.
