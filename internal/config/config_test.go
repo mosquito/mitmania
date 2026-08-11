@@ -277,27 +277,61 @@ func TestParseRequiresADataListener(t *testing.T) {
 	}
 }
 
-func TestParseRejectsTProxyNotYetImplemented(t *testing.T) {
-	_, err := Parse([]string{
+func TestParseAcceptsTProxy(t *testing.T) {
+	cfg, err := Parse([]string{
 		"--storage", "posix:///tmp/mitmania-cache",
-		"--listen-http-proxy", "tcp://*:3128",
 		"--listen-http-tproxy", "tcp://*:3129",
+		"--control", "tcp://127.0.0.1:9000",
 		"--cluster-key", validKey(),
 	})
-	if err == nil || !strings.Contains(err.Error(), "not yet implemented") {
-		t.Fatalf("Parse: expected not-yet-implemented error, got %v", err)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if cfg.HTTPTProxy == nil {
+		t.Fatal("HTTPTProxy = nil, want a parsed *Addr")
+	}
+	if cfg.HTTPTProxy.Scheme != "tcp" {
+		t.Fatalf("HTTPTProxy.Scheme = %q, want tcp", cfg.HTTPTProxy.Scheme)
 	}
 }
 
-func TestParseRejectsRedirectNotYetImplemented(t *testing.T) {
-	_, err := Parse([]string{
+func TestParseAcceptsRedirect(t *testing.T) {
+	cfg, err := Parse([]string{
 		"--storage", "posix:///tmp/mitmania-cache",
-		"--listen-http-proxy", "tcp://*:3128",
 		"--listen-http-redirect", "tcp://*:3130",
+		"--control", "tcp://127.0.0.1:9001",
 		"--cluster-key", validKey(),
 	})
-	if err == nil || !strings.Contains(err.Error(), "not yet implemented") {
-		t.Fatalf("Parse: expected not-yet-implemented error, got %v", err)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if cfg.HTTPRedirect == nil {
+		t.Fatal("HTTPRedirect = nil, want a parsed *Addr")
+	}
+	if cfg.HTTPRedirect.Scheme != "tcp" {
+		t.Fatalf("HTTPRedirect.Scheme = %q, want tcp", cfg.HTTPRedirect.Scheme)
+	}
+}
+
+func TestParseRejectsTProxyUnixScheme(t *testing.T) {
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-tproxy", "unix:///tmp/mitmania-tproxy.sock",
+		"--cluster-key", validKey(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "scheme") {
+		t.Fatalf("Parse: expected a scheme-rejection error, got %v", err)
+	}
+}
+
+func TestParseRejectsRedirectUnixScheme(t *testing.T) {
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-redirect", "unix:///tmp/mitmania-redirect.sock",
+		"--cluster-key", validKey(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "scheme") {
+		t.Fatalf("Parse: expected a scheme-rejection error, got %v", err)
 	}
 }
 

@@ -15,11 +15,11 @@ type Transport int
 const (
 	// TransportExplicit is the explicit CONNECT/absolute-form proxy path —
 	// a client deliberately configured to use this proxy, as opposed to
-	// transparent interception. The only Transport implemented this pass.
+	// transparent interception.
 	TransportExplicit Transport = iota
-	// TransportTProxy and TransportRedirect name the two transparent
-	// interception modes reserved for a future extension point — no
-	// Acceptor implements them yet.
+	// TransportTProxy and TransportRedirect are the two transparent
+	// interception modes (TProxyAcceptor, RedirectAcceptor) — Linux-only,
+	// see redirect_acceptor_linux.go/tproxy_acceptor_linux.go.
 	TransportTProxy
 	TransportRedirect
 )
@@ -40,7 +40,10 @@ func (t Transport) String() string {
 // Session is a newly-accepted connection with whatever client/destination
 // identity the Acceptor could determine at accept time. For the
 // explicit proxy, Dst is unknown until the handler parses the
-// CONNECT/absolute-URI request, so it's left zero-value here.
+// CONNECT/absolute-URI request, so it's left zero-value here; the two
+// transparent Acceptors (RedirectAcceptor, TProxyAcceptor) fill it in
+// directly, since recovering the true destination is the whole point of
+// their accept-time kernel interaction.
 type Session struct {
 	Client    netip.AddrPort
 	Dst       netip.AddrPort
@@ -67,4 +70,17 @@ func (s Session) ClientKey() netip.Addr {
 		return s.Client.Addr()
 	}
 	return loopback
+}
+
+// tcpAddrPort converts a *net.TCPAddr to netip.AddrPort with its address
+// unmapped — (*net.TCPAddr).AddrPort() does NOT do this itself, so a v4
+// connection accepted on a dual-stack socket comes back as a 4-in-6
+// address (e.g. "::ffff:127.0.0.2") whose Is4() is false, breaking any
+// downstream v4-specific matching (egress CIDRs, host comparisons) even
+// though the connection is genuinely IPv4. Confirmed live against a real
+// TPROXY-intercepted connection during development — every Acceptor
+// should go through this rather than calling AddrPort() directly.
+func tcpAddrPort(a *net.TCPAddr) netip.AddrPort {
+	addr, _ := netip.AddrFromSlice(a.IP)
+	return netip.AddrPortFrom(addr.Unmap(), uint16(a.Port))
 }

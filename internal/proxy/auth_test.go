@@ -332,6 +332,7 @@ func TestAuth_TransparentListenerFailsClosedWhenRequired(t *testing.T) {
 	defer client.Close()
 	sess := session.Session{
 		Client:    netip.MustParseAddrPort("127.0.0.1:12345"),
+		Dst:       netip.MustParseAddrPort("93.184.216.34:80"), // a real Acceptor always fills this in; a zero Dst is not a real scenario
 		Transport: session.TransportTProxy,
 		Conn:      srv,
 		Acceptor:  "http_tproxy",

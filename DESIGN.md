@@ -27,19 +27,16 @@ classDiagram
         +Accept() Session
     }
     class HTTPProxyAcceptor
-    class TransparentAcceptor
+    class RedirectAcceptor
     class TProxyAcceptor
     Acceptor <|.. HTTPProxyAcceptor
-    Acceptor <|.. TransparentAcceptor
+    Acceptor <|.. RedirectAcceptor
     Acceptor <|.. TProxyAcceptor
-    TransparentAcceptor ..> DstResolver
-    TProxyAcceptor ..> DstResolver
     class Session {
         +Client AddrPort
         +Dst AddrPort
         +Transport enum
         +Conn net.Conn
-        +Peeked []byte
     }
     Acceptor --> Session
     class Dispatcher { +Handle(Session) }
@@ -53,11 +50,9 @@ classDiagram
     }
     Selector --> ProtocolHandler
     class Http1Handler
-    class RawSpliceHandler
     class SshHandler
     class ImapHandler
     ProtocolHandler <|.. Http1Handler
-    ProtocolHandler <|.. RawSpliceHandler
     ProtocolHandler <|.. SshHandler
     ProtocolHandler <|.. ImapHandler
     class TLSService {
@@ -91,7 +86,7 @@ classDiagram
     Control ..> CA
 ```
 
-- **Acceptor** — the only layer aware of transport; fills `Session{Client,Dst,Conn}`. Three implementations (explicit, TPROXY, REDIRECT).
+- **Acceptor** — the only layer aware of transport; fills `Session{Client,Dst,Conn}`. Three implementations: `HTTPProxyAcceptor` (explicit, both plain and TLS-terminated), `RedirectAcceptor` (recovers the pre-NAT destination via `SO_ORIGINAL_DST`, Linux-only), `TProxyAcceptor` (binds with `IP_TRANSPARENT`; the accepted connection's own local address already is the real destination, no extra recovery step). REDIRECT/TPROXY sessions carry no CONNECT authority, so `Http1Handler` derives `host` for connection-phase matching by peeking the traffic itself (TLS SNI or the HTTP `Host` header) before matching runs — the reverse of the explicit path's peek-after-match order.
 - **Dispatcher** — transport-agnostic; selects the handler and never terminates TLS itself.
 - **ProtocolHandler** — the extension seam. Owns the decision of whether/when to call `TLSService`. `Http1Handler` owns HTTP/2 too, rather than a separate handler: h2 vs. h1 is a per-connection ALPN outcome known only after `TLSService.Terminate`, not something `Selector` can route on ahead of time.
 - **TLSService** — an on-demand service (not a fixed pipeline stage), so STARTTLS-style mid-stream handlers can call it too.

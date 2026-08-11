@@ -67,8 +67,8 @@ type Config struct {
 
 	HTTPProxy    *Addr           // --listen-http-proxy; explicit CONNECT/absolute-form proxy
 	HTTPSProxy   *HTTPSProxyAddr // --listen-https-proxy; TLS-terminated explicit proxy (opt-in)
-	HTTPTProxy   *Addr           // --listen-http-tproxy; not yet implemented
-	HTTPRedirect *Addr           // --listen-http-redirect; not yet implemented
+	HTTPTProxy   *Addr           // --listen-http-tproxy; transparent TPROXY (Linux-only; see session.TProxyAcceptor)
+	HTTPRedirect *Addr           // --listen-http-redirect; transparent REDIRECT (Linux-only; see session.RedirectAcceptor)
 
 	Control Addr // --control
 
@@ -151,8 +151,8 @@ type cliFlags struct {
 
 	ListenHTTPProxy    string `name:"listen-http-proxy" help:"Explicit HTTP(S) proxy address, e.g. tcp://*:3128."`
 	ListenHTTPSProxy   string `name:"listen-https-proxy" help:"TLS-terminated explicit proxy address, e.g. tcp://*:443 (port defaults to 443 if omitted); repeatable ?cn=...&cn=... sets its own certificate's identity (first value CN, full list SAN set), default \"Internal Proxy\"."`
-	ListenHTTPTProxy   string `name:"listen-http-tproxy" help:"Transparent TPROXY address (not yet implemented)."`
-	ListenHTTPRedirect string `name:"listen-http-redirect" help:"Transparent REDIRECT address (not yet implemented)."`
+	ListenHTTPTProxy   string `name:"listen-http-tproxy" help:"Transparent TPROXY address, e.g. tcp://*:3129 (Linux-only; needs IP_TRANSPARENT + policy routing set up by the operator, see docs/usecases/transparent.md)."`
+	ListenHTTPRedirect string `name:"listen-http-redirect" help:"Transparent REDIRECT address, e.g. tcp://*:3130 (Linux-only; needs iptables/nftables DNAT set up by the operator, see docs/usecases/transparent.md)."`
 
 	Control string `name:"control" short:"c" help:"Control API address (default $XDG_RUNTIME_DIR/mitmania.sock; required if XDG_RUNTIME_DIR is unset); may also be tcp://host:port."`
 
@@ -253,10 +253,24 @@ func Parse(args []string) (cfg *Config, err error) {
 	result.ClusterKey = key
 
 	if cli.ListenHTTPTProxy != "" {
-		return nil, fmt.Errorf("--listen-http-tproxy: not yet implemented")
+		addr, err := ParseAddr(cli.ListenHTTPTProxy)
+		if err != nil {
+			return nil, fmt.Errorf("--listen-http-tproxy: %w", err)
+		}
+		if addr.Scheme != "tcp" {
+			return nil, fmt.Errorf("--listen-http-tproxy: scheme %q not supported (need tcp://; TPROXY is an IP-routing concept, a unix socket has no destination to recover)", addr.Scheme)
+		}
+		result.HTTPTProxy = &addr
 	}
 	if cli.ListenHTTPRedirect != "" {
-		return nil, fmt.Errorf("--listen-http-redirect: not yet implemented")
+		addr, err := ParseAddr(cli.ListenHTTPRedirect)
+		if err != nil {
+			return nil, fmt.Errorf("--listen-http-redirect: %w", err)
+		}
+		if addr.Scheme != "tcp" {
+			return nil, fmt.Errorf("--listen-http-redirect: scheme %q not supported (need tcp://; REDIRECT is an IP-routing concept, a unix socket has no destination to recover)", addr.Scheme)
+		}
+		result.HTTPRedirect = &addr
 	}
 
 	if cli.ListenHTTPProxy != "" {
@@ -278,8 +292,8 @@ func Parse(args []string) (cfg *Config, err error) {
 		result.HTTPSProxy = &httpsAddr
 	}
 
-	if result.HTTPProxy == nil && result.HTTPSProxy == nil {
-		return nil, fmt.Errorf("no data listeners configured: set --listen-http-proxy or --listen-https-proxy")
+	if result.HTTPProxy == nil && result.HTTPSProxy == nil && result.HTTPTProxy == nil && result.HTTPRedirect == nil {
+		return nil, fmt.Errorf("no data listeners configured: set --listen-http-proxy, --listen-https-proxy, --listen-http-tproxy, or --listen-http-redirect")
 	}
 
 	controlSpec := cli.Control

@@ -162,48 +162,81 @@ func run(args []string) error {
 		}
 	}()
 
-	acceptor, err := listenHTTPProxy(cfg.HTTPProxy)
-	if err != nil {
-		stop()
-		wg.Wait()
-		return fmt.Errorf("listen --listen-http-proxy: %w", err)
+	// Every data listener is independently optional now (config.Parse only
+	// requires at least one of the four) — bind whichever are configured,
+	// each in the same acquire-then-register-cleanup-then-run-accept-loop
+	// shape, so adding --listen-http-tproxy/--listen-http-redirect didn't
+	// need a special case beyond their own listenX functions.
+	var listeners []session.Acceptor
+	closeAll := func() {
+		for _, a := range listeners {
+			a.Close()
+		}
 	}
-	log.Info("explicit proxy listening", "network", cfg.HTTPProxy.Network(), "address", cfg.HTTPProxy.String())
-	log.Info("control API listening", "network", cfg.Control.Network(), "address", cfg.Control.String())
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		<-ctx.Done()
-		acceptor.Close()
-	}()
-
-	var httpsAcceptor *session.HTTPProxyAcceptor
-	if cfg.HTTPSProxy != nil {
-		httpsAcceptor, err = listenHTTPSProxy(ctx, cfg.HTTPSProxy, factory)
+	if cfg.HTTPProxy != nil {
+		acceptor, err := listenHTTPProxy(cfg.HTTPProxy)
 		if err != nil {
 			stop()
-			acceptor.Close()
+			closeAll()
+			wg.Wait()
+			return fmt.Errorf("listen --listen-http-proxy: %w", err)
+		}
+		log.Info("explicit proxy listening", "network", cfg.HTTPProxy.Network(), "address", cfg.HTTPProxy.String())
+		listeners = append(listeners, acceptor)
+	}
+
+	if cfg.HTTPSProxy != nil {
+		acceptor, err := listenHTTPSProxy(ctx, cfg.HTTPSProxy, factory)
+		if err != nil {
+			stop()
+			closeAll()
 			wg.Wait()
 			return fmt.Errorf("listen --listen-https-proxy: %w", err)
 		}
 		log.Info("https proxy listening", "network", cfg.HTTPSProxy.Addr.Network(), "address", cfg.HTTPSProxy.Addr.String(), "cn", cfg.HTTPSProxy.Names[0], "names", cfg.HTTPSProxy.Names)
+		listeners = append(listeners, acceptor)
+	}
 
+	if cfg.HTTPTProxy != nil {
+		acceptor, err := listenTProxy(cfg.HTTPTProxy)
+		if err != nil {
+			stop()
+			closeAll()
+			wg.Wait()
+			return fmt.Errorf("listen --listen-http-tproxy: %w", err)
+		}
+		log.Info("tproxy listening", "network", cfg.HTTPTProxy.Network(), "address", cfg.HTTPTProxy.String())
+		listeners = append(listeners, acceptor)
+	}
+
+	if cfg.HTTPRedirect != nil {
+		acceptor, err := listenRedirect(cfg.HTTPRedirect)
+		if err != nil {
+			stop()
+			closeAll()
+			wg.Wait()
+			return fmt.Errorf("listen --listen-http-redirect: %w", err)
+		}
+		log.Info("redirect listening", "network", cfg.HTTPRedirect.Network(), "address", cfg.HTTPRedirect.String())
+		listeners = append(listeners, acceptor)
+	}
+
+	log.Info("control API listening", "network", cfg.Control.Network(), "address", cfg.Control.String())
+
+	for _, acceptor := range listeners {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			<-ctx.Done()
-			httpsAcceptor.Close()
+			acceptor.Close()
 		}()
-
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			acceptLoop(ctx, httpsAcceptor, dispatcher, log)
+			acceptLoop(ctx, acceptor, dispatcher, log)
 		}()
 	}
-
-	acceptLoop(ctx, acceptor, dispatcher, log)
 
 	wg.Wait()
 	return nil
@@ -299,11 +332,23 @@ func (h *catHandler) WithGroup(string) slog.Handler { return h } // no grouped a
 // nothing here reads that field to log it some other way.
 func logConfig(log *slog.Logger, cfg *config.Config) {
 	log.Info("config: storage", "url", maskURL(cfg.Storage))
+	httpProxy := "(disabled)"
+	if cfg.HTTPProxy != nil {
+		httpProxy = cfg.HTTPProxy.Network() + "://" + cfg.HTTPProxy.String()
+	}
 	httpsProxy := "(disabled)"
 	if cfg.HTTPSProxy != nil {
 		httpsProxy = cfg.HTTPSProxy.Addr.Network() + "://" + cfg.HTTPSProxy.Addr.String() + " (cn=" + strings.Join(cfg.HTTPSProxy.Names, ",") + ")"
 	}
-	log.Info("config: listeners", "http_proxy", cfg.HTTPProxy.Network()+"://"+cfg.HTTPProxy.String(), "https_proxy", httpsProxy, "control", cfg.Control.Network()+"://"+cfg.Control.String())
+	tproxy := "(disabled)"
+	if cfg.HTTPTProxy != nil {
+		tproxy = cfg.HTTPTProxy.Network() + "://" + cfg.HTTPTProxy.String()
+	}
+	redirect := "(disabled)"
+	if cfg.HTTPRedirect != nil {
+		redirect = cfg.HTTPRedirect.Network() + "://" + cfg.HTTPRedirect.String()
+	}
+	log.Info("config: listeners", "http_proxy", httpProxy, "https_proxy", httpsProxy, "http_tproxy", tproxy, "http_redirect", redirect, "control", cfg.Control.Network()+"://"+cfg.Control.String())
 	log.Info("config: http framing", "header_limit", cfg.HTTPHeaderLimit, "body_window", cfg.HTTPBodyWindow)
 	log.Info("config: http upstream", "connect_timeout", cfg.HTTPConnectTimeout, "read_timeout", cfg.HTTPReadTimeout, "connect_tries", cfg.HTTPConnectTries)
 	log.Info("config: http2 upstream", "connect_timeout", cfg.HTTP2ConnectTimeout, "read_timeout", cfg.HTTP2ReadTimeout, "connect_tries", cfg.HTTP2ConnectTries)
@@ -354,7 +399,7 @@ func maskURL(raw string) string {
 	return prefix + "<REDACTED>@" + strings.TrimPrefix(masked.String(), prefix)
 }
 
-func listenHTTPProxy(addr *config.Addr) (*session.HTTPProxyAcceptor, error) {
+func listenHTTPProxy(addr *config.Addr) (session.Acceptor, error) {
 	ln, err := net.Listen(addr.Network(), addr.String())
 	if err != nil {
 		return nil, err
@@ -371,7 +416,7 @@ func listenHTTPProxy(addr *config.Addr) (*session.HTTPProxyAcceptor, error) {
 // CertFactory.SelfCert, keyed on the URL's repeatable ?cn= (default
 // ["Internal Proxy"]) and persisted in the same leaf cache used for any
 // MITM'd leaf.
-func listenHTTPSProxy(ctx context.Context, addr *config.HTTPSProxyAddr, factory *cert.CertFactory) (*session.HTTPProxyAcceptor, error) {
+func listenHTTPSProxy(ctx context.Context, addr *config.HTTPSProxyAddr, factory *cert.CertFactory) (session.Acceptor, error) {
 	leaf, err := factory.SelfCert(ctx, addr.Names)
 	if err != nil {
 		return nil, fmt.Errorf("self-cert for %v: %w", addr.Names, err)
@@ -385,7 +430,37 @@ func listenHTTPSProxy(ctx context.Context, addr *config.HTTPSProxyAddr, factory 
 	return session.NewHTTPProxyAcceptor(tlsLn, "https_proxy"), nil
 }
 
-func acceptLoop(ctx context.Context, acceptor *session.HTTPProxyAcceptor, dispatcher *proxy.Dispatcher, log *slog.Logger) {
+// listenRedirect binds --listen-http-redirect: an ordinary listener (no
+// special socket options needed to bind it — REDIRECT's DNAT rewriting
+// happens entirely on the kernel/nftables side before the connection is
+// even accepted), wrapped in session.RedirectAcceptor to recover each
+// connection's true pre-NAT destination via SO_ORIGINAL_DST. Linux-only;
+// see internal/session/redirect_acceptor_linux.go and its _other.go
+// build-tagged stub.
+func listenRedirect(addr *config.Addr) (session.Acceptor, error) {
+	ln, err := net.Listen(addr.Network(), addr.String())
+	if err != nil {
+		return nil, err
+	}
+	return session.NewRedirectAcceptor(ln, "http_redirect")
+}
+
+// listenTProxy binds --listen-http-tproxy via session.ListenTProxy, not
+// plain net.Listen — unlike REDIRECT, TPROXY needs IP_TRANSPARENT set on
+// the listening socket itself before bind (see ListenTProxy's doc
+// comment), the prerequisite for the kernel to deliver a connection
+// whose destination isn't this listener's own address at all.
+// Linux-only; see internal/session/tproxy_acceptor_linux.go and its
+// _other.go build-tagged stub.
+func listenTProxy(addr *config.Addr) (session.Acceptor, error) {
+	ln, err := session.ListenTProxy(addr.Network(), addr.String())
+	if err != nil {
+		return nil, err
+	}
+	return session.NewTProxyAcceptor(ln, "http_tproxy")
+}
+
+func acceptLoop(ctx context.Context, acceptor session.Acceptor, dispatcher *proxy.Dispatcher, log *slog.Logger) {
 	for {
 		sess, err := acceptor.Accept()
 		if err != nil {

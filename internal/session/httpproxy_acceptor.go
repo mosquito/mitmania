@@ -29,7 +29,7 @@ func (a *HTTPProxyAcceptor) Accept() (Session, error) {
 
 	var client netip.AddrPort
 	if tcpAddr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
-		client = tcpAddr.AddrPort()
+		client = tcpAddrPort(tcpAddr)
 	}
 	// unix socket RemoteAddr carries no usable peer identity; Client stays
 	// the zero value and Session.ClientKey() falls back to loopback.
