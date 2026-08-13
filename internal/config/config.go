@@ -92,6 +92,16 @@ type Config struct {
 	HTTP2ReadTimeout    time.Duration // --http2-timeout-read, seconds
 	HTTP2ConnectTries   int           // --http2-connect-tries
 
+	// HTTPClientReadTimeout bounds how long a newly-accepted connection
+	// (explicit or transparent) may take to deliver its first complete
+	// request/ClientHello, on both the explicit-proxy and transparent
+	// (TPROXY/REDIRECT) listeners — set as a read deadline before the
+	// first peek/parse, cleared once it succeeds. Independent of
+	// HTTPReadTimeout, which bounds the *upstream* leg: nothing bounded
+	// this client-facing wait before, so a slow or stalled client could
+	// hold a listener slot open indefinitely.
+	HTTPClientReadTimeout time.Duration // --http-timeout-client-read, seconds
+
 	// Outcall (broker) timeouts and concurrency — their own flags,
 	// not inherited from --http-*: the broker is expected to answer in
 	// milliseconds, so a slow one is an incident, not a wait.
@@ -161,9 +171,10 @@ type cliFlags struct {
 	HTTPHeaderLimit string `name:"http-header-limit" default:"64k" help:"Http1Handler: max bytes for request/status line + headers."`
 	HTTPBodyWindow  string `name:"http-body-window" default:"64k" help:"Http1Handler: bytes of body tee'd for inspection before streaming through untouched."`
 
-	HTTPTimeoutConnect int `name:"http-timeout-connect" default:"2" help:"h1: upstream TCP+TLS dial budget, seconds."`
-	HTTPTimeoutRead    int `name:"http-timeout-read" default:"60" help:"h1: deadline for the upstream response to start, seconds."`
-	HTTPConnectTries   int `name:"http-connect-tries" default:"3" help:"h1: upstream connect attempts before giving up."`
+	HTTPTimeoutConnect    int `name:"http-timeout-connect" default:"2" help:"h1: upstream TCP+TLS dial budget, seconds."`
+	HTTPTimeoutRead       int `name:"http-timeout-read" default:"60" help:"h1: deadline for the upstream response to start, seconds."`
+	HTTPConnectTries      int `name:"http-connect-tries" default:"3" help:"h1: upstream connect attempts before giving up."`
+	HTTPTimeoutClientRead int `name:"http-timeout-client-read" default:"30" help:"h1: deadline for a newly-accepted connection (explicit or transparent) to deliver its first complete request/ClientHello, seconds."`
 
 	// Explicit env tags: Kong's DefaultEnvars splits "http2" into "http"+"2"
 	// (camelCase digit-boundary rule), which would otherwise derive the
@@ -338,6 +349,9 @@ func Parse(args []string) (cfg *Config, err error) {
 		return nil, err
 	}
 	if err := parsePositiveInt("http-connect-tries", cli.HTTPConnectTries, &result.HTTPConnectTries); err != nil {
+		return nil, err
+	}
+	if err := parsePositiveSeconds("http-timeout-client-read", cli.HTTPTimeoutClientRead, &result.HTTPClientReadTimeout); err != nil {
 		return nil, err
 	}
 	if err := parsePositiveSeconds("http2-timeout-connect", cli.HTTP2TimeoutConnect, &result.HTTP2ConnectTimeout); err != nil {

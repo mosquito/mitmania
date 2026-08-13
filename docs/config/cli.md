@@ -7,7 +7,7 @@ Every flag has an automatically derived `MITMANIA_*` environment variable; a com
 | Shared state | `-s, --storage`; `-k, --cluster-key`; `-c, --control` |
 | Listeners | `--listen-http-proxy`; `--listen-https-proxy`; `--listen-http-tproxy`; `--listen-http-redirect` (transparent, Linux-only) |
 | HTTP bounds | `--http-header-limit` (`64k`); `--http-body-window` (`64k`) |
-| HTTP/1 timeouts | `--http-timeout-connect`; `--http-timeout-read`; `--http-connect-tries` |
+| HTTP/1 timeouts | `--http-timeout-connect`; `--http-timeout-read`; `--http-timeout-client-read` (`30s`); `--http-connect-tries` |
 | HTTP/2 timeouts | `--http2-timeout-connect`; `--http2-timeout-read`; `--http2-connect-tries` |
 | Brokers | `--outcall-timeout-connect`; `--outcall-timeout-read`; `--outcall-max-inflight` |
 | Identity | `--trusted-proxies` |

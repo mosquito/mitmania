@@ -27,6 +27,8 @@ Because `outcome` is identical to the metric label, a log-based alert and a metr
 - `forwarding-denied` — egress policy or the self-listener guard denied the resolved destination.
 - `auth-required` / `auth-failed` — proxy-auth gate outcomes.
 - `misdirected-authority`, `invalid-request`, `invalid-request-shape`, `headers-too-large`, `unsupported-absolute-scheme` — request-shape rejections.
+- `empty-connection` — the connection closed before a single byte arrived (health checks, a client racing several connections and abandoning the losers); distinct from `invalid-request`, which means bytes arrived but didn't parse.
+- `client-read-timeout` — the client never delivered a complete first request/ClientHello within `--http-timeout-client-read`; client got 408.
 - `splice (mitm:false)` — a raw tunnel was opened; no `status`.
 
 ## Building alerts and dashboards

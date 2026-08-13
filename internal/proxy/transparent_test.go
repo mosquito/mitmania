@@ -169,7 +169,13 @@ func TestServeTransparent_TLS_SNIMatch_MITMTerminate(t *testing.T) {
 // absolute-form — exactly what a real TPROXY/REDIRECT-caught HTTP client
 // sends) is matched on its Host header and relayed through the ordinary
 // message-phase engine, mirroring serveAbsoluteForm's behavior for an
-// explicit client.
+// explicit client. Getting there needs two rule entries now: the
+// connection-phase decision is always made on the literal destination IP
+// (never guessed from content — see serveTransparent's doc comment), so
+// an IP-scoped proto:"tcp" entry is what grants mitm:true and lets the
+// HTTP parse happen at all; only once that's granted does the Host-header
+// rule take over for message-phase policy, the same two-stage
+// relationship CONNECT-then-message-phase matching already has.
 func TestServeTransparent_HTTP_HostHeaderMatch(t *testing.T) {
 	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "host seen: %s", r.Host)
@@ -177,7 +183,10 @@ func TestServeTransparent_HTTP_HostHeaderMatch(t *testing.T) {
 	defer origin.Close()
 	dst := mustAddrPort(t, origin.Listener.Addr().String())
 
-	ruleJSON := `{"http":[{"match":{"host":"host.example"}}]}`
+	ruleJSON := fmt.Sprintf(`{"http":[
+	  {"match":{"host":%q,"proto":"tcp"}},
+	  {"match":{"host":"host.example"}}
+	]}`, dst.Addr().String())
 	handler, _ := newTestHandler(t, ruleJSON)
 	proxyAddr := runTransparentProxy(t, handler, session.TransportRedirect, dst)
 
@@ -280,8 +289,8 @@ func TestServeTransparent_TLS_AccessLogUsesSNI(t *testing.T) {
 
 	ruleJSON := `{"http":[{"match":{"host":"sni.example"},"mitm":false}]}`
 	handler, _ := newTestHandler(t, ruleJSON)
-	var buf bytes.Buffer
-	handler.Logger = slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	buf := &syncBuffer{}
+	handler.Logger = slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	proxyAddr := runTransparentProxy(t, handler, session.TransportRedirect, dst)
 
 	raw, err := net.Dial("tcp", proxyAddr)
@@ -314,4 +323,339 @@ func TestServeTransparent_TLS_AccessLogUsesSNI(t *testing.T) {
 	if strings.Contains(log, "url=https://"+dst.Addr().String()) {
 		t.Fatalf("access log url field used the raw destination IP instead of the SNI hostname: %q", log)
 	}
+}
+
+// TestServeTransparent_HTTP_EmptyConnectionLogged proves a connection that
+// closes before sending a single byte — the common, harmless case of
+// connection racing (e.g. an iOS client's Happy Eyeballs opening several
+// TCP connections and aborting every loser) or a plain TCP health check —
+// logs the distinct "empty-connection" outcome, not "invalid-request",
+// which would wrongly suggest the client sent something malformed.
+func TestServeTransparent_HTTP_EmptyConnectionLogged(t *testing.T) {
+	dst := mustAddrPort(t, "203.0.113.10:443")
+	handler, _ := newTestHandler(t, `{"http":[{"match":{}}]}`)
+	buf := &syncBuffer{}
+	handler.Logger = slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	proxyAddr := runTransparentProxy(t, handler, session.TransportRedirect, dst)
+
+	conn, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	conn.Close() // no bytes ever written — exactly a raced/aborted connection
+
+	log := waitForSubstring(t, buf, "outcome=")
+	if !strings.Contains(log, "outcome=empty-connection") {
+		t.Fatalf("outcome = %q, want empty-connection", log)
+	}
+	if strings.Contains(log, "outcome=invalid-request") {
+		t.Fatalf("a connection with zero bytes sent was logged as invalid-request, not empty-connection: %q", log)
+	}
+}
+
+// TestServeTransparent_HTTP_GarbageNoMatchingRuleFailsClosed proves
+// traffic that's neither TLS nor HTTP (garbage bytes that never form a
+// valid header block) still fails closed when no rule permits it as
+// opaque TCP — a specific-host rule that doesn't match the literal
+// destination IP is exactly a no-match, same as ordinary HTTP/HTTPS
+// traffic with no applicable rule.
+func TestServeTransparent_HTTP_GarbageNoMatchingRuleFailsClosed(t *testing.T) {
+	dst := mustAddrPort(t, "203.0.113.10:443")
+	handler, _ := newTestHandler(t, `{"http":[{"match":{"host":"sni.example"},"mitm":false}]}`)
+	buf := &syncBuffer{}
+	handler.Logger = slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	proxyAddr := runTransparentProxy(t, handler, session.TransportRedirect, dst)
+
+	conn, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	conn.Write([]byte("not an http request at all\r\n"))
+	conn.Close()
+
+	log := waitForSubstring(t, buf, "outcome=")
+	if !strings.Contains(log, "outcome=no-match") {
+		t.Fatalf("outcome = %q, want no-match", log)
+	}
+}
+
+// TestServeTransparent_OpaqueTCP_Splice proves the core claim: a
+// transparently-intercepted connection that's neither a valid TLS
+// ClientHello nor a valid HTTP request — like Telegram's MTProto
+// "obfuscated" transport, deliberately random-looking bytes with no SNI
+// and no Host header — still gets policy-controlled raw (mitm:false)
+// passthrough when an explicit proto:"tcp" rule allows it, matched on the
+// literal destination IP (there's no other signal available). The origin
+// is a bare TCP echo server (no HTTP, no TLS) to prove the splice is
+// byte-perfect, not just "some connection happened".
+func TestServeTransparent_OpaqueTCP_Splice(t *testing.T) {
+	dst := rawEchoServer(t)
+
+	ruleJSON := fmt.Sprintf(`{"http":[{"match":{"host":%q,"proto":"tcp"},"mitm":false}]}`, dst.Addr().String())
+	handler, _ := newTestHandler(t, ruleJSON)
+	proxyAddr := runTransparentProxy(t, handler, session.TransportRedirect, dst)
+
+	conn, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	payload := []byte("\x00\x01not-http-not-tls-random-bytes\xff\xfe")
+	if _, err := conn.Write(payload); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	conn.(*net.TCPConn).CloseWrite()
+
+	got, err := io.ReadAll(conn)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if !bytes.Equal(got, payload) {
+		t.Fatalf("echoed back %q, want %q (splice was not byte-perfect)", got, payload)
+	}
+}
+
+// TestServeTransparent_OpaqueTCP_NoMatch_FailsClosed proves opaque TCP
+// passthrough is opt-in per destination, not a blanket fallback: absent a
+// proto:"tcp" rule, non-HTTP/non-TLS traffic still fails closed exactly
+// like today.
+func TestServeTransparent_OpaqueTCP_NoMatch_FailsClosed(t *testing.T) {
+	dst := rawEchoServer(t)
+	handler, _ := newTestHandler(t, `{"http":[{"match":{"host":"sni.example"},"mitm":false}]}`)
+	buf := &syncBuffer{}
+	handler.Logger = slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	proxyAddr := runTransparentProxy(t, handler, session.TransportRedirect, dst)
+
+	conn, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+	conn.Write([]byte("\x00\x01not-http-not-tls\xff"))
+	conn.(*net.TCPConn).CloseWrite()
+
+	log := waitForSubstring(t, buf, "outcome=")
+	if !strings.Contains(log, "outcome=no-match") {
+		t.Fatalf("outcome = %q, want no-match", log)
+	}
+}
+
+// TestServeTransparent_OpaqueTCP_MITMTrueNonHTTPFailsClosed proves a rule
+// matching non-TLS traffic with mitm:true (or mitm omitted, defaulting to
+// it) attempts an HTTP parse — that's what mitm:true on this path means,
+// see serveTransparentOpaque's doc comment — and if the traffic genuinely
+// isn't HTTP either, fails closed rather than silently downgrading to a
+// raw splice the operator didn't ask for. The connection is not spliced;
+// the origin never sees anything.
+func TestServeTransparent_OpaqueTCP_MITMTrueNonHTTPFailsClosed(t *testing.T) {
+	dst := rawEchoServer(t)
+	// mitm omitted -> defaults true.
+	ruleJSON := fmt.Sprintf(`{"http":[{"match":{"host":%q,"proto":"tcp"}}]}`, dst.Addr().String())
+	handler, _ := newTestHandler(t, ruleJSON)
+	buf := &syncBuffer{}
+	handler.Logger = slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	proxyAddr := runTransparentProxy(t, handler, session.TransportRedirect, dst)
+
+	conn, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+	conn.Write([]byte("\x00\x01not-http-not-tls\xff"))
+	conn.(*net.TCPConn).CloseWrite()
+
+	log := waitForSubstring(t, buf, "outcome=")
+	if !strings.Contains(log, "outcome=invalid-request") {
+		t.Fatalf("outcome = %q, want invalid-request", log)
+	}
+}
+
+// rawEchoServer is a bare TCP server that echoes back whatever it reads —
+// no HTTP, no TLS — standing in for an opaque, non-HTTP(S) protocol's
+// origin (e.g. Telegram's MTProto). Proves a splice is byte-perfect, not
+// just "some bytes came back".
+func rawEchoServer(t *testing.T) netip.AddrPort {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer conn.Close()
+				io.Copy(conn, conn)
+			}()
+		}
+	}()
+	return mustAddrPort(t, ln.Addr().String())
+}
+
+// TestServeTransparent_ClientReadTimeoutLogged proves a transparently-
+// intercepted connection that never delivers a complete ClientHello/
+// request within ClientReadTimeout gets "client-read-timeout", distinct
+// from "empty-connection" (which requires the peer to actually close/
+// reset — here the connection is deliberately left open with nothing
+// sent, so only the deadline can end it).
+func TestServeTransparent_ClientReadTimeoutLogged(t *testing.T) {
+	dst := mustAddrPort(t, "203.0.113.10:443")
+	handler, _ := newTestHandler(t, `{"http":[{"match":{}}]}`)
+	handler.ClientReadTimeout = 50 * time.Millisecond
+	buf := &syncBuffer{}
+	handler.Logger = slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	proxyAddr := runTransparentProxy(t, handler, session.TransportRedirect, dst)
+
+	conn, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	log := waitForSubstring(t, buf, "outcome=")
+	if !strings.Contains(log, "outcome=client-read-timeout") {
+		t.Fatalf("outcome = %q, want client-read-timeout", log)
+	}
+}
+
+// halfCloseProbeServer accepts one connection, writes a fixed message,
+// half-closes its write side (but keeps reading), and reports whatever it
+// eventually read back on receivedCh. Used to prove relay() correctly
+// propagates a peeked/replayed connection's half-close to the other side
+// as a read EOF, not just an eventual full close.
+func halfCloseProbeServer(t *testing.T) (addr netip.AddrPort, receivedCh <-chan []byte) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	ch := make(chan []byte, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		conn.Write([]byte("origin says hi"))
+		conn.(*net.TCPConn).CloseWrite()
+		got, _ := io.ReadAll(conn)
+		ch <- got
+	}()
+	return mustAddrPort(t, ln.Addr().String()), ch
+}
+
+// TestServeTransparent_TLS_HalfClosePropagates proves relay()'s
+// half-close optimization actually reaches the client through the Replay
+// wrapper (a *replayConn) every transparent-mode mitm:false splice goes
+// through — embedding net.Conn (an interface) does not promote
+// CloseWrite on its own (Go only promotes methods the embedded field's
+// declared TYPE has, not ones the concrete value underneath happens to
+// implement). Without replayConn's own CloseWrite, relay's closeWrite
+// helper falls back to a FULL Close() the moment the origin's send
+// direction finishes — which still produces a clean-looking EOF on the
+// client's read (so a test that only checks "did I get EOF" can't tell
+// the two apart), but severs the client's own still-valid ability to
+// keep sending, exactly the shape that breaks a bidirectional protocol
+// like Telegram's MTProto: the origin sends an initial chunk, then the
+// client's own in-flight/pending send gets cut out from under it. The
+// real proof is whether a write after the origin's half-close still
+// succeeds and actually reaches the origin.
+//
+// (prependConn — the analogous wrapper for the new opaque-TCP
+// passthrough — gets the identical fix, but isolating it the same way
+// isn't possible: entering that path at all requires the client to
+// already have closed/reset, so there's no still-open direction left to
+// prove a write survives through.)
+func TestServeTransparent_TLS_HalfClosePropagates(t *testing.T) {
+	dst, receivedCh := halfCloseProbeServer(t)
+	ruleJSON := `{"http":[{"match":{"host":"sni.example"},"mitm":false}]}`
+	handler, _ := newTestHandler(t, ruleJSON)
+	proxyAddr := runTransparentProxy(t, handler, session.TransportRedirect, dst)
+
+	// Captured via a real tls.Client Handshake over an in-memory pipe, not
+	// driven live over the test's own connection: a live Handshake() reads
+	// from its net.Conn internally, which would race directly reading the
+	// same raw socket below — whichever read wins steals the origin's
+	// bytes from the other. The raw origin here never completes a TLS
+	// handshake anyway (mitm:false splices the TCP connection through
+	// untouched regardless of what travels over it), so there's nothing
+	// for a live Handshake() to complete against; only the ClientHello
+	// bytes it wrote are needed.
+	hello := captureClientHello(t, "sni.example")
+
+	raw, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer raw.Close()
+	if _, err := raw.Write(hello); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	// Read exactly what the origin sent before it half-closed — proves the
+	// forward direction relayed correctly, same as the ordinary splice
+	// test. Not the interesting part of this test.
+	raw.SetReadDeadline(time.Now().Add(2 * time.Second))
+	buf := make([]byte, len("origin says hi"))
+	if _, err := io.ReadFull(raw, buf); err != nil {
+		t.Fatalf("ReadFull: %v", err)
+	}
+	if string(buf) != "origin says hi" {
+		t.Fatalf("got %q, want \"origin says hi\"", buf)
+	}
+
+	// The origin only half-closed (halfCloseProbeServer keeps reading) —
+	// the client's own connection must still be writable. A write here
+	// failing is the actual signature of the bug: mitmania fully closed
+	// the connection out from under the client instead of half-closing
+	// just the direction that finished.
+	followup := []byte("client followup")
+	if _, err := raw.Write(followup); err != nil {
+		t.Fatalf("client write after the origin's half-close failed — the connection was fully closed instead of half-closed: %v", err)
+	}
+	raw.(*net.TCPConn).CloseWrite()
+
+	select {
+	case got := <-receivedCh:
+		// got is everything the origin ever read, which — TCP being
+		// full-duplex — includes the ClientHello bytes relayed to it
+		// earlier too; only the tail (whether the followup actually
+		// arrived at all) is what this test is proving.
+		if !bytes.HasSuffix(got, followup) {
+			t.Fatalf("origin never received the client's followup after the origin's own half-close (got %d bytes, want it to end with %q)", len(got), followup)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("origin never finished reading the client's followup")
+	}
+}
+
+// captureClientHello drives a real tls.Client Handshake over an in-memory
+// net.Pipe and returns exactly the ClientHello bytes it wrote — for a test
+// that needs genuine ClientHello bytes to send over a different
+// connection without a live tls.Conn also reading that connection
+// concurrently.
+func captureClientHello(t *testing.T, sni string) []byte {
+	t.Helper()
+	client, server := net.Pipe()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		tls.Client(client, &tls.Config{ServerName: sni, InsecureSkipVerify: true}).Handshake()
+	}()
+	buf := make([]byte, 4096)
+	server.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, err := server.Read(buf)
+	if err != nil {
+		t.Fatalf("capture ClientHello: %v", err)
+	}
+	server.Close()
+	client.Close()
+	<-done
+	return buf[:n]
 }
