@@ -1633,6 +1633,8 @@
 <li><code>forwarding-denied</code> — egress policy or the self-listener guard denied the resolved destination.</li>
 <li><code>auth-required</code> / <code>auth-failed</code> — proxy-auth gate outcomes.</li>
 <li><code>misdirected-authority</code>, <code>invalid-request</code>, <code>invalid-request-shape</code>, <code>headers-too-large</code>, <code>unsupported-absolute-scheme</code> — request-shape rejections.</li>
+<li><code>empty-connection</code> — the connection closed before a single byte arrived (health checks, a client racing several connections and abandoning the losers); distinct from <code>invalid-request</code>, which means bytes arrived but didn't parse.</li>
+<li><code>client-read-timeout</code> — the client never delivered a complete first request/ClientHello within <code>--http-timeout-client-read</code>; client got 408.</li>
 <li><code>splice (mitm:false)</code> — a raw tunnel was opened; no <code>status</code>.</li>
 </ul>
 <h2 id="building-alerts-and-dashboards">Building alerts and dashboards<a class="headerlink" href="#building-alerts-and-dashboards" title="Permanent link">&para;</a></h2>

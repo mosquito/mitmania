@@ -1564,8 +1564,20 @@
     <p><strong>Who and why:</strong> operators need to govern containers, VMs, appliances, or agents that cannot be configured with an explicit HTTP proxy—or that must not be able to opt out by clearing proxy environment variables.</p>
 <p><strong>MITM required?</strong> No for connection and resolved-address policy; yes when HTTPS method, path, headers, bodies, injection, or broker decisions must be visible. A <code>mitm:false</code> rule remains an end-to-end TLS splice.</p>
 <h2 id="domain-based-matching-without-a-connect-authority">Domain-based matching without a CONNECT authority<a class="headerlink" href="#domain-based-matching-without-a-connect-authority" title="Permanent link">&para;</a></h2>
-<p>A transparent connection carries no CONNECT/absolute-form authority to read <code>host</code> from — only the destination IP:port the Acceptor recovered. To still match rules on domain, mitmania peeks the traffic itself before any rule runs: the TLS ClientHello's SNI for HTTPS, or the request's <code>Host</code> header for plaintext HTTP, in both cases <em>before</em> connection-phase matching rather than after (the reverse of the explicit CONNECT path, which already knows its host and only peeks afterward to catch an SNI/authority mismatch).</p>
-<p>A client that sends no SNI at all (permitted by TLS, though rare in practice) has no domain to match on — the destination's literal IP is used as <code>host</code> instead, the same fallback <code>mitm:false</code>'s literal-IP dial path already uses elsewhere.</p>
+<p>A transparent connection carries no CONNECT/absolute-form authority to read <code>host</code> from — only the destination IP:port the Acceptor recovered. To still match rules on domain, mitmania peeks the traffic itself before any rule runs: the TLS ClientHello's SNI, <em>before</em> connection-phase matching rather than after (the reverse of the explicit CONNECT path, which already knows its host and only peeks afterward to catch an SNI/authority mismatch).</p>
+<p>A client that sends no SNI at all (permitted by TLS, though rare in practice), or whose traffic isn't a recognizable TLS ClientHello at all, has no domain to match on — the destination's literal IP is used as <code>host</code> instead. That decision is never guessed from content: whether a non-TLS connection even <em>might</em> be HTTP is not inspected before matching, since doing so would make the single most security-relevant decision in the pipeline (<code>mitm</code> true or false) depend on an unreliable heuristic, and some real traffic is deliberately built to defeat exactly that kind of classification (see below).</p>
+<h2 id="non-tls-transparent-traffic-opaque-tcp-passthrough">Non-TLS transparent traffic (opaque TCP passthrough)<a class="headerlink" href="#non-tls-transparent-traffic-opaque-tcp-passthrough" title="Permanent link">&para;</a></h2>
+<p>A transparent listener sees whatever an operator's REDIRECT/TPROXY capture rule sends it — not just HTTP(S). Some clients speak protocols that are not TLS and not HTTP, and some (Telegram's MTProto "obfuscated" transport is the canonical example) are deliberately built to look like neither, specifically to defeat protocol classification by anything sitting on the path. Such a client also typically never closes its connection to "help" a guessing game along — it sends its initial bytes and then waits for a response, so waiting for the connection to close before deciding "this isn't HTTP" would mean it's never spliced at all (see <code>--http-timeout-client-read</code> below).</p>
+<p>For any connection that isn't a recognized TLS ClientHello, mitmania matches on the literal destination IP with <code>Proto: "tcp"</code> — a sentinel an operator must name explicitly, so this never fires for ordinary traffic by accident:</p>
+<pre class="highlight"><code class="language-json">{"http": [
+  {"match": {"host": "91.108.4.0/22", "proto": "tcp"}, "mitm": false}
+]}</code></pre>
+<p>What a matched rule can do depends on <code>mitm</code>:</p>
+<ul>
+<li><strong><code>mitm:false</code></strong> — splice the connection raw, byte-for-byte, exactly as accepted. This is the only thing a plain "allow this destination" rule can mean for unidentified traffic — mitmania cannot decrypt or parse content it never identified.</li>
+<li><strong><code>mitm:true</code></strong> (or <code>mitm</code> omitted, which defaults to it) — the operator has explicitly asked for interception at this destination, so it's no longer a guess to go try parsing the connection as HTTP (the only protocol mitmania knows how to intercept): if it parses, the request's own <code>Host</code> header takes over for message-phase policy, exactly like an explicit absolute-form request. If it genuinely isn't HTTP either, the connection fails closed rather than silently falling back to a splice the operator didn't ask for.</li>
+</ul>
+<p>Plain, unencrypted HTTP transparent traffic goes through this same opaque path — it isn't TLS either — so reaching its <code>Host</code>-header-based message-phase policy needs an IP-scoped <code>proto:"tcp"</code> rule granting <code>mitm:true</code> for that destination, same as any other non-TLS traffic.</p>
 <h2 id="choose-a-transport">Choose a transport<a class="headerlink" href="#choose-a-transport" title="Permanent link">&para;</a></h2>
 <div class="table-wrapper"><table>
 <thead>
@@ -2127,6 +2139,14 @@ mitmania \
             class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
             data-active="false" data-depth="2" onClick="deferSetActiveTocLink('#domain-based-matching-without-a-connect-authority');">
             Domain-based matching without a CONNECT authority
+        </a>
+        
+
+        
+        <a href="#non-tls-transparent-traffic-opaque-tcp-passthrough"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="2" onClick="deferSetActiveTocLink('#non-tls-transparent-traffic-opaque-tcp-passthrough');">
+            Non-TLS transparent traffic (opaque TCP passthrough)
         </a>
         
 
