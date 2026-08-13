@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -280,8 +279,8 @@ func TestServeTransparent_TLS_AccessLogUsesSNI(t *testing.T) {
 
 	ruleJSON := `{"http":[{"match":{"host":"sni.example"},"mitm":false}]}`
 	handler, _ := newTestHandler(t, ruleJSON)
-	var buf bytes.Buffer
-	handler.Logger = slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	buf := &syncBuffer{}
+	handler.Logger = slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	proxyAddr := runTransparentProxy(t, handler, session.TransportRedirect, dst)
 
 	raw, err := net.Dial("tcp", proxyAddr)
@@ -313,5 +312,58 @@ func TestServeTransparent_TLS_AccessLogUsesSNI(t *testing.T) {
 	// TestHttp1Handler_AccessLogIncludesResolvedDst) — only url= must not.
 	if strings.Contains(log, "url=https://"+dst.Addr().String()) {
 		t.Fatalf("access log url field used the raw destination IP instead of the SNI hostname: %q", log)
+	}
+}
+
+// TestServeTransparent_HTTP_EmptyConnectionLogged proves a connection that
+// closes before sending a single byte — the common, harmless case of
+// connection racing (e.g. an iOS client's Happy Eyeballs opening several
+// TCP connections and aborting every loser) or a plain TCP health check —
+// logs the distinct "empty-connection" outcome, not "invalid-request",
+// which would wrongly suggest the client sent something malformed.
+func TestServeTransparent_HTTP_EmptyConnectionLogged(t *testing.T) {
+	dst := mustAddrPort(t, "203.0.113.10:443")
+	handler, _ := newTestHandler(t, `{"http":[{"match":{}}]}`)
+	buf := &syncBuffer{}
+	handler.Logger = slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	proxyAddr := runTransparentProxy(t, handler, session.TransportRedirect, dst)
+
+	conn, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	conn.Close() // no bytes ever written — exactly a raced/aborted connection
+
+	log := waitForSubstring(t, buf, "outcome=")
+	if !strings.Contains(log, "outcome=empty-connection") {
+		t.Fatalf("outcome = %q, want empty-connection", log)
+	}
+	if strings.Contains(log, "outcome=invalid-request") {
+		t.Fatalf("a connection with zero bytes sent was logged as invalid-request, not empty-connection: %q", log)
+	}
+}
+
+// TestServeTransparent_HTTP_GarbageStillInvalidRequest proves the
+// empty-connection reclassification doesn't swallow a genuinely malformed
+// request — a client that sends bytes that never form a valid HTTP header
+// block still logs "invalid-request", distinct from sending nothing at
+// all.
+func TestServeTransparent_HTTP_GarbageStillInvalidRequest(t *testing.T) {
+	dst := mustAddrPort(t, "203.0.113.10:443")
+	handler, _ := newTestHandler(t, `{"http":[{"match":{}}]}`)
+	buf := &syncBuffer{}
+	handler.Logger = slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	proxyAddr := runTransparentProxy(t, handler, session.TransportRedirect, dst)
+
+	conn, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	conn.Write([]byte("not an http request at all\r\n"))
+	conn.Close()
+
+	log := waitForSubstring(t, buf, "outcome=")
+	if !strings.Contains(log, "outcome=invalid-request") {
+		t.Fatalf("outcome = %q, want invalid-request", log)
 	}
 }

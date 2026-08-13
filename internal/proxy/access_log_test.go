@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"log/slog"
+	"net"
 	"net/netip"
 	"strings"
 	"testing"
@@ -84,5 +85,32 @@ func TestHttp1Handler_AccessLogIncludesResolvedDstIPv6(t *testing.T) {
 
 	if !strings.Contains(buf.String(), "dst=[2606:2800:220:1:248:1893:25c8:1946]:443") {
 		t.Fatalf("access log missing resolved IPv6 dst: %q", buf.String())
+	}
+}
+
+// TestHttp1Handler_EmptyConnectionLogged proves an explicit-proxy
+// connection that closes before sending a single byte — a health check,
+// or a client racing several connections and abandoning the losers —
+// logs the distinct "empty-connection" outcome rather than
+// "invalid-request", which would wrongly suggest the client sent
+// something malformed.
+func TestHttp1Handler_EmptyConnectionLogged(t *testing.T) {
+	handler, _ := newHappyPathHandler(t)
+	buf := &syncBuffer{}
+	handler.Logger = slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	proxyAddr := runProxy(t, handler)
+
+	conn, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	conn.Close() // no bytes ever written
+
+	log := waitForSubstring(t, buf, "outcome=")
+	if !strings.Contains(log, "outcome=empty-connection") {
+		t.Fatalf("outcome = %q, want empty-connection", log)
+	}
+	if strings.Contains(log, "outcome=invalid-request") {
+		t.Fatalf("a connection with zero bytes sent was logged as invalid-request, not empty-connection: %q", log)
 	}
 }

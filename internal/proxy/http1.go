@@ -302,6 +302,16 @@ func (h *Http1Handler) Serve(ctx context.Context, sess session.Session, dialer U
 func (h *Http1Handler) readBoundedRequest(sess session.Session, conn *prependConn, br *bufio.Reader, treq reqTrace) (*http.Request, error) {
 	err := boundNextHeaderBlock(br, conn, h.HeaderLimit)
 	if err != nil {
+		// A connection that closed before sending a single byte (a health
+		// check, a speculative/raced TCP connection abandoned in favor of
+		// another) never had a request to be malformed — a "400" response
+		// would just be a write to an already-dead connection, and lumping
+		// it in with "invalid-request" hides genuinely broken clients in
+		// the noise.
+		if errors.Is(err, errEmptyConnection) {
+			h.logAccessErr(sess, "", "", "empty-connection", 0, treq, err)
+			return nil, err
+		}
 		spec := httperror.InvalidRequest
 		outcome := "invalid-request"
 		if errors.Is(err, errHeadersTooLarge) {

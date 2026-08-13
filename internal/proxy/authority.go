@@ -16,6 +16,15 @@ import (
 
 var errHeadersTooLarge = errors.New("proxy: request headers too large")
 
+// errEmptyConnection wraps boundNextHeaderBlock's error when the
+// connection ended (EOF or otherwise) before a single byte was received —
+// a speculative/aborted TCP connection with no request at all, not a
+// malformed one. Both explicit clients (health checks, connection racing)
+// and transparently-intercepted ones hit this constantly and harmlessly;
+// callers use it to log a distinct, quieter outcome than "invalid-request"
+// rather than conflating "sent nothing" with "sent garbage."
+var errEmptyConnection = errors.New("proxy: connection closed before any bytes were received")
+
 // prependConn keeps replay bytes on the connection itself, rather than in
 // a temporary bufio.Reader wrapper. That matters when an HTTP Upgrade
 // hands the connection to relay(): bytes prefetched behind the 101/request
@@ -125,6 +134,9 @@ func boundNextHeaderBlock(br *bufio.Reader, conn *prependConn, limit int) error 
 			break
 		}
 		if err != nil && !errors.Is(err, bufio.ErrBufferFull) {
+			if header.Len() == 0 {
+				return fmt.Errorf("%w: %w", errEmptyConnection, err)
+			}
 			return err
 		}
 	}

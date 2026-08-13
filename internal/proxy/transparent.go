@@ -137,8 +137,17 @@ func (h *Http1Handler) serveTransparentHTTP(ctx context.Context, sess session.Se
 	br := bufio.NewReaderSize(stream, bufioReadSize)
 
 	if err := boundNextHeaderBlock(br, stream, h.HeaderLimit); err != nil {
+		// Very common and entirely benign on a transparent listener:
+		// connection racing (a client, e.g. an iOS device doing Happy
+		// Eyeballs, opens several TCP connections and aborts every loser
+		// without writing to it) and plain TCP-level health checks both
+		// land here as a connection that closed before sending anything —
+		// distinct from a client that sent bytes that didn't parse.
 		outcome := "invalid-request"
-		if errors.Is(err, errHeadersTooLarge) {
+		switch {
+		case errors.Is(err, errEmptyConnection):
+			outcome = "empty-connection"
+		case errors.Is(err, errHeadersTooLarge):
 			outcome = "headers-too-large"
 		}
 		h.logAccessErr(sess, method, "", outcome, 0, treq, err)
