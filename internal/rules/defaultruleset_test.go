@@ -107,6 +107,33 @@ func TestDefaultRuleset_Buckets_ExposesEveryEntry(t *testing.T) {
 	}
 }
 
+func TestCompileDefaultRuleset_SharesIdenticalHTTPPolicyIndex(t *testing.T) {
+	d, _, err := CompileDefaultRuleset([]byte(`{
+		"0.0.0.0/0":{"uuid":"v4","http":[{"match":{"host":"*.example.com"},"mitm":false}],"egress":[{"cidr":"0.0.0.0/0","action":"allow"}]},
+		"::/0":{"uuid":"v6","http":[{"match":{"host":"*.example.com"},"mitm":false}],"egress":[{"cidr":"::/0","action":"allow"}]}
+	}`))
+	if err != nil {
+		t.Fatalf("CompileDefaultRuleset: %v", err)
+	}
+	v4, ok := d.Lookup(netip.MustParseAddr("192.0.2.1"))
+	if !ok {
+		t.Fatal("IPv4 lookup did not find catch-all")
+	}
+	v6, ok := d.Lookup(netip.MustParseAddr("2001:db8::1"))
+	if !ok {
+		t.Fatal("IPv6 lookup did not find catch-all")
+	}
+	if v4.hostIndex != v6.hostIndex {
+		t.Fatal("identical IPv4 and IPv6 http policies did not share their immutable host index")
+	}
+	if len(v4.egress) != 1 || len(v6.egress) != 1 || v4.egress[0].prefix == v6.egress[0].prefix {
+		t.Fatal("sharing the HTTP index also shared or changed bucket-specific egress")
+	}
+	if v4.UUID() != "v4" || v6.UUID() != "v6" {
+		t.Fatal("sharing the HTTP index also changed bucket-specific UUIDs")
+	}
+}
+
 // --- Sparse mask matching ---
 
 func TestDefaultRuleset_SparseMask_MatchesFixedBytesOnly(t *testing.T) {

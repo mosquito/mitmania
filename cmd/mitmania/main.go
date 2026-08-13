@@ -110,7 +110,8 @@ func run(args []string) error {
 	if err := ruleStore.EnsureDefault(ctx); err != nil {
 		return fmt.Errorf("rules/default: %w", err)
 	}
-	engine := rules.NewRuleEngine(ruleStore, rules.WithLogger(log), rules.WithMetrics(tp.M), rules.WithTracer(tp.Traces.Tracer))
+	engine := rules.NewRuleEngine(ruleStore, rules.WithLogger(log), rules.WithMetrics(tp.M), rules.WithTracer(tp.Traces.Tracer), rules.WithCacheTTL(cfg.RulesCacheTTL))
+	log.Info("config: rules", "cache_ttl", cfg.RulesCacheTTL)
 	flow := &flowsink.Counters{}
 
 	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca.Cert.Raw})

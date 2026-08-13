@@ -74,6 +74,16 @@ type Config struct {
 
 	ClusterKey []byte
 
+	// RulesCacheTTL bounds how long the rule engine trusts an
+	// already-resolved client/default-table lookup before reconfirming it
+	// against Storage — see rules.WithCacheTTL. 0 disables the cache
+	// entirely: every connection reconfirms against Storage and a Storage
+	// error always fails the lookup closed, the original behavior. A
+	// positive value also lets an already-cached entry keep serving if
+	// Storage becomes unreachable while it's still held, rather than
+	// failing every connection the instant Storage blips.
+	RulesCacheTTL time.Duration // --rules-cache-ttl, seconds; 0 disables
+
 	// HTTPHeaderLimit and HTTPBodyWindow are Http1Handler's own framing
 	// bounds — protocol-specific, not core config, but parsed here
 	// alongside everything else.
@@ -167,6 +177,8 @@ type cliFlags struct {
 	Control string `name:"control" short:"c" help:"Control API address (default $XDG_RUNTIME_DIR/mitmania.sock; required if XDG_RUNTIME_DIR is unset); may also be tcp://host:port."`
 
 	ClusterKey string `name:"cluster-key" short:"k" help:"Base64-encoded cluster key, >=32 decoded bytes."`
+
+	RulesCacheTTL int `name:"rules-cache-ttl" default:"1" help:"Seconds a resolved rule lookup is trusted before reconfirming against Storage; 0 disables caching (always reconfirm, fail closed on any Storage error). A cached lookup keeps serving if Storage becomes unreachable while still within this window."`
 
 	HTTPHeaderLimit string `name:"http-header-limit" default:"64k" help:"Http1Handler: max bytes for request/status line + headers."`
 	HTTPBodyWindow  string `name:"http-body-window" default:"64k" help:"Http1Handler: bytes of body tee'd for inspection before streaming through untouched."`
@@ -324,6 +336,10 @@ func Parse(args []string) (cfg *Config, err error) {
 	}
 	result.Control = controlAddr
 
+	if err := parseNonNegativeSeconds("rules-cache-ttl", cli.RulesCacheTTL, &result.RulesCacheTTL); err != nil {
+		return nil, err
+	}
+
 	headerLimit, err := ParseSize(cli.HTTPHeaderLimit)
 	if err != nil {
 		return nil, fmt.Errorf("--http-header-limit: %w", err)
@@ -454,6 +470,17 @@ type helpExit struct{}
 func parsePositiveSeconds(flagName string, seconds int, out *time.Duration) error {
 	if seconds <= 0 {
 		return fmt.Errorf("--%s: must be > 0, got %d", flagName, seconds)
+	}
+	*out = time.Duration(seconds) * time.Second
+	return nil
+}
+
+// parseNonNegativeSeconds is parsePositiveSeconds for a flag whose zero
+// value has its own meaning (disabling a feature) rather than being
+// invalid.
+func parseNonNegativeSeconds(flagName string, seconds int, out *time.Duration) error {
+	if seconds < 0 {
+		return fmt.Errorf("--%s: must be >= 0, got %d", flagName, seconds)
 	}
 	*out = time.Duration(seconds) * time.Second
 	return nil

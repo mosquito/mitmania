@@ -2,6 +2,7 @@ package rules
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -249,11 +250,16 @@ func marshalCanonical(entries []parsedEntry) ([]byte, error) {
 	return json.Marshal(out)
 }
 
-// compiledBucket is one compiled rules/default entry.
+// compiledBucket is one compiled rules/default entry. contentHash is a
+// sha256 of the bucket's full source RuleFile (uuid, http, egress, auth
+// all included) — the fingerprint a hot-reload compares against to decide
+// whether this bucket's compiled RuleSet can be reused rather than
+// re-derived; see compileParsedEntries's doc comment.
 type compiledBucket struct {
-	key   maskedKey
-	label string // canonical form, e.g. "10.0.0.0/8" or "10.0.0.0/255.0.255.0"
-	rules *RuleSet
+	key         maskedKey
+	label       string // canonical form, e.g. "10.0.0.0/8" or "10.0.0.0/255.0.255.0"
+	rules       *RuleSet
+	contentHash [32]byte
 }
 
 // DefaultRuleset is a compiled rules/default table: every client without
@@ -290,7 +296,10 @@ func CompileDefaultRuleset(data []byte) (*DefaultRuleset, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	d, err := compileParsedEntries(entries)
+	// PUT-time validation always compiles fresh (prev: nil) — an operator
+	// pushing a table wants full validation feedback, not a bucket silently
+	// reused from whatever happened to be running before.
+	d, err := compileParsedEntries(entries, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -301,33 +310,98 @@ func CompileDefaultRuleset(data []byte) (*DefaultRuleset, []byte, error) {
 	return d, canonical, nil
 }
 
-func compileParsedEntries(entries []parsedEntry) (*DefaultRuleset, error) {
+// bucketByLabel indexes d's buckets by canonical label, so a hot-reload can
+// look up a possibly-reusable previous bucket under the same key a fresh
+// parse would produce. nil-safe: a nil DefaultRuleset (no prior compile —
+// first load) has no buckets to reuse.
+func (d *DefaultRuleset) bucketByLabel() map[string]compiledBucket {
+	if d == nil {
+		return nil
+	}
+	out := make(map[string]compiledBucket, len(d.v4)+len(d.v6))
+	for _, b := range d.v4 {
+		out[b.label] = b
+	}
+	for _, b := range d.v6 {
+		out[b.label] = b
+	}
+	return out
+}
+
+// compileParsedEntries compiles entries into a DefaultRuleset. prev, when
+// non-nil, lets a hot-reload skip recompiling a bucket whose full source
+// content (uuid, http, egress, auth — everything, via a sha256 over its
+// re-marshaled RuleFile) is byte-identical to prev's same-label bucket —
+// reusing its whole compiled RuleSet (http rules, host index, egress,
+// auth) rather than re-deriving any of it. This is what makes a
+// storage.Version bump that doesn't actually change a bucket's content (a
+// redundant re-PUT of identical bytes, or an edit to a sibling bucket
+// sharing the same rules/default blob) cheap instead of a full recompile
+// — host-index rebuild included — of a potentially huge generated table.
+// Unlike comparing just uuid, this can never mask a genuine content edit:
+// any actual change, uuid bump or not, produces a different hash and
+// forces a real recompile. CompileDefaultRuleset (the PUT-time validation
+// path) always passes nil, so a PUT is always validated fresh.
+func compileParsedEntries(entries []parsedEntry, prev *DefaultRuleset) (*DefaultRuleset, error) {
 	var v4, v6 []compiledBucket
 	var v4Prefixes, v6Prefixes []netip.Prefix // only the contiguous (plain-prefix) subset — the coverage obligation's scope
+	type cachedHTTPPolicy struct {
+		rules     []CompiledRule
+		hostIndex *hostCandidateIndex
+	}
+	// Generated default tables commonly repeat one large http[] policy in the
+	// IPv4 and IPv6 catch-all buckets. Compile and index identical policies
+	// once; RuleSet metadata, auth, and egress remain bucket-specific.
+	httpPolicies := make(map[string]cachedHTTPPolicy)
+	prevBuckets := prev.bucketByLabel()
 
 	for _, pe := range entries {
 		label := pe.key.canonical()
 
-		auth, err := CompileAuth(pe.rule.Auth)
+		ruleJSON, err := json.Marshal(pe.rule)
 		if err != nil {
-			return nil, fmt.Errorf("rules/default[%q]: invalid auth config: %w", label, err)
+			return nil, fmt.Errorf("rules/default[%q]: encode rule: %w", label, err)
 		}
-		compiled, err := Compile(pe.rule)
-		if err != nil {
-			return nil, fmt.Errorf("rules/default[%q]: invalid rules: %w", label, err)
-		}
-		var egress []CompiledEgress
-		if pe.rule.Egress != nil {
-			if egress, err = CompileEgress(pe.rule.Egress); err != nil {
-				return nil, fmt.Errorf("rules/default[%q]: invalid egress rules: %w", label, err)
+		hash := sha256.Sum256(ruleJSON)
+
+		var bucket compiledBucket
+		if prevBucket, ok := prevBuckets[label]; ok && prevBucket.contentHash == hash {
+			bucket = compiledBucket{key: pe.key, label: label, rules: prevBucket.rules, contentHash: hash}
+		} else {
+			auth, err := CompileAuth(pe.rule.Auth)
+			if err != nil {
+				return nil, fmt.Errorf("rules/default[%q]: invalid auth config: %w", label, err)
+			}
+			httpJSON, err := json.Marshal(pe.rule.HTTP)
+			if err != nil {
+				return nil, fmt.Errorf("rules/default[%q]: encode http policy: %w", label, err)
+			}
+			policy, ok := httpPolicies[string(httpJSON)]
+			if !ok {
+				compiled, compileErr := Compile(pe.rule)
+				if compileErr != nil {
+					return nil, fmt.Errorf("rules/default[%q]: invalid rules: %w", label, compileErr)
+				}
+				policy = cachedHTTPPolicy{
+					rules:     compiled,
+					hostIndex: buildHostCandidateIndex(compiled),
+				}
+				httpPolicies[string(httpJSON)] = policy
+			}
+			var egress []CompiledEgress
+			if pe.rule.Egress != nil {
+				if egress, err = CompileEgress(pe.rule.Egress); err != nil {
+					return nil, fmt.Errorf("rules/default[%q]: invalid egress rules: %w", label, err)
+				}
+			}
+			bucket = compiledBucket{
+				key:         pe.key,
+				label:       label,
+				rules:       newRuleSetWithHostIndex(policy.rules, policy.hostIndex, egress, pe.rule.UUID, auth),
+				contentHash: hash,
 			}
 		}
 
-		bucket := compiledBucket{
-			key:   pe.key,
-			label: label,
-			rules: &RuleSet{rules: compiled, egress: egress, uuid: pe.rule.UUID, auth: auth},
-		}
 		if pe.key.is4 {
 			v4 = append(v4, bucket)
 		} else {

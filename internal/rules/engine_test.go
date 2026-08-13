@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/netip"
 	"testing"
+	"time"
 )
 
 // TestLookupRequest_WorkedExampleOrdering exercises first-match-wins
@@ -429,7 +430,47 @@ func TestRuleEngine_Lookup_DefaultTableHotReload(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(rs2.rules) != 1 {
-		t.Fatalf("rules len after on-disk change = %d, want 1", len(rs2.rules))
+		t.Fatalf("rules len after on-disk change = %d, want 1 — content hashing must not mask a real edit even with an unchanged uuid", len(rs2.rules))
+	}
+}
+
+// TestRuleEngine_Lookup_DefaultTableIdenticalContentSkipsRecompile
+// verifies the actual optimization: a rules/default re-PUT whose content
+// is byte-for-byte identical (a redundant re-apply, or another bucket in
+// the same blob changing) still bumps storage.Version — PosixStorage's
+// Version is mtime+size-based — but the hot-reload notices the bucket's
+// own content hash is unchanged and reuses the whole previously compiled
+// bucket instead of recompiling it. See compileParsedEntries's doc
+// comment.
+func TestRuleEngine_Lookup_DefaultTableIdenticalContentSkipsRecompile(t *testing.T) {
+	store := NewRuleStore(testStorage(t, t.TempDir()))
+	ctx := context.Background()
+	client := netip.MustParseAddr("203.0.113.7")
+	body := []byte(`{"0.0.0.0/0":{"uuid":"stable","http":[]},"::/0":{"http":[]}}`)
+
+	if err := store.SaveDefault(ctx, body); err != nil {
+		t.Fatal(err)
+	}
+
+	engine := NewRuleEngine(store)
+	rs1, err := engine.Lookup(ctx, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rs1.rules) != 0 {
+		t.Fatalf("initial rules len = %d, want 0", len(rs1.rules))
+	}
+
+	time.Sleep(2 * time.Millisecond) // guarantee PosixStorage's mtime-based Version actually moves
+	if err := store.SaveDefault(ctx, body); err != nil {
+		t.Fatal(err)
+	}
+	rs2, err := engine.Lookup(ctx, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rs1 != rs2 {
+		t.Fatalf("byte-identical rules/default re-save returned a freshly compiled RuleSet instead of reusing the old bucket")
 	}
 }
 
