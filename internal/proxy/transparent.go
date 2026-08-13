@@ -50,14 +50,21 @@ func (h *Http1Handler) serveTransparent(ctx context.Context, sess session.Sessio
 // pin (see egress.go), so this reuses that path rather than inventing a
 // second fallback concept.
 func (h *Http1Handler) serveTransparentTLS(ctx context.Context, sess session.Session, dialer UpstreamDialer, hello *PeekedHello, dstAddr, dstPort string) {
-	ctx, treq := h.startReq(ctx, "h1", "", "")
 	method := sess.Transport.String()
-	reqURL := "https://" + net.JoinHostPort(dstAddr, dstPort)
 
+	// The SNI, not the kernel-recovered destination IP, is what a rule
+	// actually matched against — logging/tracing on the IP alone would
+	// make an access-log line for a domain-based rule unreadable (every
+	// host behind the same load balancer or CDN edge logs identically).
+	// Falls back to the IP only when the client sent no SNI at all, same
+	// as connIn.Host below.
 	sni := hello.ServerName
 	if sni == "" {
 		sni = dstAddr
 	}
+	reqURL := "https://" + net.JoinHostPort(sni, dstPort)
+	ctx, treq := h.startReq(ctx, "h1", method, reqURL)
+
 	connIn := rules.ConnInput{Host: sni, Port: dstPort, Proto: "https"}
 
 	ruleSet, err := h.Rules.Lookup(ctx, sess.ClientKey())

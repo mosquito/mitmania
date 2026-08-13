@@ -2,15 +2,19 @@ package proxy
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -259,5 +263,55 @@ func TestServeTransparent_EgressDenied_FailsClosed(t *testing.T) {
 	tlsConn.SetDeadline(time.Now().Add(3 * time.Second))
 	if err := tlsConn.Handshake(); err == nil {
 		t.Fatal("Handshake: want an error (connection dropped, egress denied), got success")
+	}
+}
+
+// TestServeTransparent_TLS_AccessLogUsesSNI proves the access log for a
+// transparently-intercepted TLS connection identifies it by the SNI
+// hostname a rule actually matched on, not the kernel-recovered
+// destination IP — logging the IP alone would make every domain behind
+// the same load balancer or CDN edge indistinguishable in the log.
+func TestServeTransparent_TLS_AccessLogUsesSNI(t *testing.T) {
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "raw origin response")
+	}))
+	defer origin.Close()
+	dst := mustAddrPort(t, origin.Listener.Addr().String())
+
+	ruleJSON := `{"http":[{"match":{"host":"sni.example"},"mitm":false}]}`
+	handler, _ := newTestHandler(t, ruleJSON)
+	var buf bytes.Buffer
+	handler.Logger = slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	proxyAddr := runTransparentProxy(t, handler, session.TransportRedirect, dst)
+
+	raw, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer raw.Close()
+
+	tlsConn := tls.Client(raw, &tls.Config{ServerName: "sni.example", InsecureSkipVerify: true})
+	if err := tlsConn.Handshake(); err != nil {
+		t.Fatalf("TLS handshake: %v", err)
+	}
+	req, _ := http.NewRequest(http.MethodGet, "https://sni.example/", nil)
+	if err := req.Write(tlsConn); err != nil {
+		t.Fatalf("req.Write: %v", err)
+	}
+	resp, err := http.ReadResponse(bufio.NewReader(tlsConn), req)
+	if err != nil {
+		t.Fatalf("ReadResponse: %v", err)
+	}
+	resp.Body.Close()
+
+	log := buf.String()
+	wantURL := "url=https://sni.example:" + strconv.Itoa(int(dst.Port()))
+	if !strings.Contains(log, wantURL) {
+		t.Fatalf("access log url field = %q, want it to name the SNI hostname, not the raw destination IP (%s): %q", wantURL, dst.Addr(), log)
+	}
+	// dst= is expected to carry the resolved IP (see
+	// TestHttp1Handler_AccessLogIncludesResolvedDst) — only url= must not.
+	if strings.Contains(log, "url=https://"+dst.Addr().String()) {
+		t.Fatalf("access log url field used the raw destination IP instead of the SNI hostname: %q", log)
 	}
 }
