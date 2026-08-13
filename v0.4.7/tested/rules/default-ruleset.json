@@ -1,0 +1,37 @@
+{
+  "0.0.0.0/0": {
+    "http": [],
+    "egress": [
+      {"cidr": "127.0.0.0/8", "action": "deny"},
+      {"cidr": "10.0.0.0/8", "action": "deny"},
+      {"cidr": "172.16.0.0/12", "action": "deny"},
+      {"cidr": "192.168.0.0/16", "action": "deny"},
+      {"cidr": "169.254.0.0/16", "action": "deny"},
+      {"cidr": "0.0.0.0/0", "action": "allow"},
+      {"cidr": "::/0", "action": "allow"}
+    ]
+  },
+  "::/0": {
+    "http": [],
+    "egress": [
+      {"cidr": "::1/128", "action": "deny"},
+      {"cidr": "fc00::/7", "action": "deny"},
+      {"cidr": "fe80::/10", "action": "deny"},
+      {"cidr": "0.0.0.0/0", "action": "allow"},
+      {"cidr": "::/0", "action": "allow"}
+    ]
+  },
+  "10.0.0.0/8": {
+    "uuid": "corp-net",
+    "http": [
+      {"match": {"host": "httpbingo.org", "port": "443", "proto": "https"}, "mitm": false}
+    ]
+  },
+  "10.0.0.0/255.0.255.0": {
+    "uuid": "probe-fabric",
+    "http": [
+      {"match": {"host": "httpbingo.org", "port": "443", "proto": "https"}, "mitm": false},
+      {"match": {"host": "example.com", "port": "443", "proto": "https"}, "mitm": false}
+    ]
+  }
+}
