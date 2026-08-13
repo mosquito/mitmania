@@ -304,6 +304,14 @@ func CompileDefaultRuleset(data []byte) (*DefaultRuleset, []byte, error) {
 func compileParsedEntries(entries []parsedEntry) (*DefaultRuleset, error) {
 	var v4, v6 []compiledBucket
 	var v4Prefixes, v6Prefixes []netip.Prefix // only the contiguous (plain-prefix) subset — the coverage obligation's scope
+	type cachedHTTPPolicy struct {
+		rules     []CompiledRule
+		hostIndex *hostCandidateIndex
+	}
+	// Generated default tables commonly repeat one large http[] policy in the
+	// IPv4 and IPv6 catch-all buckets. Compile and index identical policies
+	// once; RuleSet metadata, auth, and egress remain bucket-specific.
+	httpPolicies := make(map[string]cachedHTTPPolicy)
 
 	for _, pe := range entries {
 		label := pe.key.canonical()
@@ -312,9 +320,21 @@ func compileParsedEntries(entries []parsedEntry) (*DefaultRuleset, error) {
 		if err != nil {
 			return nil, fmt.Errorf("rules/default[%q]: invalid auth config: %w", label, err)
 		}
-		compiled, err := Compile(pe.rule)
+		httpJSON, err := json.Marshal(pe.rule.HTTP)
 		if err != nil {
-			return nil, fmt.Errorf("rules/default[%q]: invalid rules: %w", label, err)
+			return nil, fmt.Errorf("rules/default[%q]: encode http policy: %w", label, err)
+		}
+		policy, ok := httpPolicies[string(httpJSON)]
+		if !ok {
+			compiled, compileErr := Compile(pe.rule)
+			if compileErr != nil {
+				return nil, fmt.Errorf("rules/default[%q]: invalid rules: %w", label, compileErr)
+			}
+			policy = cachedHTTPPolicy{
+				rules:     compiled,
+				hostIndex: buildHostCandidateIndex(compiled),
+			}
+			httpPolicies[string(httpJSON)] = policy
 		}
 		var egress []CompiledEgress
 		if pe.rule.Egress != nil {
@@ -326,7 +346,7 @@ func compileParsedEntries(entries []parsedEntry) (*DefaultRuleset, error) {
 		bucket := compiledBucket{
 			key:   pe.key,
 			label: label,
-			rules: &RuleSet{rules: compiled, egress: egress, uuid: pe.rule.UUID, auth: auth},
+			rules: newRuleSetWithHostIndex(policy.rules, policy.hostIndex, egress, pe.rule.UUID, auth),
 		}
 		if pe.key.is4 {
 			v4 = append(v4, bucket)

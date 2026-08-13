@@ -37,10 +37,25 @@ type MsgInput struct {
 // RuleSet is one client's compiled http[] rule list plus its egress[]
 // policy — two independent lists over the same connection.
 type RuleSet struct {
-	rules  []CompiledRule
-	egress []CompiledEgress
-	uuid   string
-	auth   *CompiledAuth
+	rules     []CompiledRule
+	hostIndex *hostCandidateIndex
+	egress    []CompiledEgress
+	uuid      string
+	auth      *CompiledAuth
+}
+
+func newRuleSet(rules []CompiledRule, egress []CompiledEgress, uuid string, auth *CompiledAuth) *RuleSet {
+	return newRuleSetWithHostIndex(rules, buildHostCandidateIndex(rules), egress, uuid, auth)
+}
+
+func newRuleSetWithHostIndex(rules []CompiledRule, hostIndex *hostCandidateIndex, egress []CompiledEgress, uuid string, auth *CompiledAuth) *RuleSet {
+	return &RuleSet{
+		rules:     rules,
+		hostIndex: hostIndex,
+		egress:    egress,
+		uuid:      uuid,
+		auth:      auth,
+	}
 }
 
 // UUID is this rule file's top-level identity — the proxied client's
@@ -64,7 +79,17 @@ func (rs *RuleSet) HTTPRules() []CompiledRule { return rs.rules }
 // connection-phase predicate matched at all — the caller then fails
 // closed with a 511 rather than letting the connection through.
 func (rs *RuleSet) LookupConn(in ConnInput) (mitm bool, matched bool) {
-	for _, r := range rs.rules {
+	if rs.hostIndex == nil {
+		for _, r := range rs.rules {
+			if r.connHost.match(in.Host) && r.connPort.match(in.Port) && r.connProto.match(in.Proto) {
+				return r.mitm, true
+			}
+		}
+		return false, false
+	}
+	var local [32]int
+	for _, ruleID := range rs.hostIndex.appendCandidates(in.Host, local[:0]) {
+		r := &rs.rules[ruleID]
 		if r.connHost.match(in.Host) && r.connPort.match(in.Port) && r.connProto.match(in.Proto) {
 			return r.mitm, true
 		}
@@ -77,8 +102,25 @@ func (rs *RuleSet) LookupConn(in ConnInput) (mitm bool, matched bool) {
 // is the one whose request[]/response[] pipeline runs — exactly one rule,
 // no cascading.
 func (rs *RuleSet) LookupRequest(in MsgInput) (*CompiledRule, bool) {
-	for i := range rs.rules {
-		r := &rs.rules[i]
+	if rs.hostIndex == nil {
+		for i := range rs.rules {
+			r := &rs.rules[i]
+			if !r.connHost.match(in.Host) || !r.connPort.match(in.Port) || !r.connProto.match(in.Proto) {
+				continue
+			}
+			if !r.msgPath.match(in.Path) || !r.msgMethod.match(in.Method) {
+				continue
+			}
+			if !matchHeaders(r.msgHeader, in.Header) {
+				continue
+			}
+			return r, true
+		}
+		return nil, false
+	}
+	var local [32]int
+	for _, ruleID := range rs.hostIndex.appendCandidates(in.Host, local[:0]) {
+		r := &rs.rules[ruleID]
 		if !r.connHost.match(in.Host) || !r.connPort.match(in.Port) || !r.connProto.match(in.Proto) {
 			continue
 		}
@@ -288,7 +330,7 @@ func (e *RuleEngine) lookupIP(ctx context.Context, client netip.Addr, version st
 		e.compileFailed(ctx, logID, start, err)
 		return nil, err
 	}
-	rs := &RuleSet{rules: compiled, egress: egress, uuid: rf.UUID, auth: auth}
+	rs := newRuleSet(compiled, egress, rf.UUID, auth)
 
 	e.mu.Lock()
 	_, wasCached := e.cache[client]

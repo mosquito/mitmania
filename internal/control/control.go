@@ -20,9 +20,18 @@ import (
 	"mitmania/internal/rules"
 )
 
-// maxRuleFileBytes bounds a PUT /rules/{ip} request body — rule files are
-// small, hand-authored JSON, not a place to accept unbounded input.
-const maxRuleFileBytes = 1 << 20 // 1 MiB
+const (
+	// Per-client overrides may also be generated, but remain independently
+	// bounded from the much larger fleet-wide default table.
+	maxRuleFileBytes = 10 << 20 // 10 MiB
+
+	// rules/default can contain generated fleet-wide hostname policy and must
+	// repeat it across its IPv4 and IPv6 coverage buckets. Keep it bounded —
+	// the body is read, decoded, and regex-compiled in memory — but allow the
+	// larger machine-generated representation without raising every per-client
+	// endpoint's limit with it.
+	maxDefaultRulesetBytes = 64 << 20 // 64 MiB
+)
 
 // Control wires the control API to the subsystems it manages. Shutdown is
 // process-level (signal-triggered, see cmd/mitmania) — there's no HTTP

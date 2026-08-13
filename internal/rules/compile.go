@@ -34,9 +34,10 @@ var validResponseActions = map[string]bool{
 // pattern; the zero value (always: true) matches everything, for an
 // omitted match field — missing field means implicit "*".
 type matcher struct {
-	always bool
-	glob   string
-	re     *regexp.Regexp
+	always   bool
+	glob     string
+	re       *regexp.Regexp
+	suffixes []string
 }
 
 func compileMatcher(pattern string) (matcher, error) {
@@ -44,6 +45,9 @@ func compileMatcher(pattern string) (matcher, error) {
 		return matcher{always: true}, nil
 	}
 	if rest, ok := strings.CutPrefix(pattern, "re:"); ok {
+		if suffixes, recognized := parseImportedSuffixRegex(rest); recognized {
+			return matcher{suffixes: suffixes}, nil
+		}
 		re, err := regexp.Compile(rest)
 		if err != nil {
 			return matcher{}, fmt.Errorf("invalid regex %q: %w", pattern, err)
@@ -60,6 +64,18 @@ func compileMatcher(pattern string) (matcher, error) {
 func (m matcher) match(s string) bool {
 	if m.always {
 		return true
+	}
+	if m.suffixes != nil {
+		for _, suffix := range m.suffixes {
+			if len(s) == len(suffix) && strings.EqualFold(s, suffix) {
+				return true
+			}
+			start := len(s) - len(suffix)
+			if start > 0 && s[start-1] == '.' && strings.EqualFold(s[start:], suffix) {
+				return true
+			}
+		}
+		return false
 	}
 	if m.re != nil {
 		return m.re.MatchString(s)

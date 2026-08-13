@@ -218,7 +218,7 @@ func TestControl_HandlePutDefaultBodyReadError(t *testing.T) {
 func TestControl_HandlePutDefaultOversizedBody(t *testing.T) {
 	c, _ := newTestControl(t)
 
-	body := strings.Repeat("a", maxRuleFileBytes+100)
+	body := strings.Repeat("a", maxDefaultRulesetBytes+100)
 	rec := serveHTTP(c, http.MethodPut, "/rules/default", strings.NewReader(body))
 	if rec.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("status = %d, want 413; body=%s", rec.Code, rec.Body)
@@ -227,6 +227,21 @@ func TestControl_HandlePutDefaultOversizedBody(t *testing.T) {
 	getRec := serveHTTP(c, http.MethodGet, "/rules/default", nil)
 	if got := strings.TrimSpace(getRec.Body.String()); got != `{}` {
 		t.Fatalf("GET after rejected PUT = %s, want the unwritten default", got)
+	}
+}
+
+func TestControl_HandlePutDefaultMayExceedPerClientLimit(t *testing.T) {
+	c, _ := newTestControl(t)
+
+	// JSON permits leading whitespace, giving this focused limit test a valid
+	// document larger than maxRuleFileBytes without constructing or compiling
+	// an artificial million-byte matcher. The default-table endpoint accepts
+	// it and persists the small canonical representation; PUT /rules/{ip}
+	// remains independently capped at maxRuleFileBytes.
+	body := strings.Repeat(" ", maxRuleFileBytes+1) + `{"0.0.0.0/0":{"http":[]},"::/0":{"http":[]}}`
+	rec := serveHTTP(c, http.MethodPut, "/rules/default", strings.NewReader(body))
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204; body=%s", rec.Code, rec.Body)
 	}
 }
 

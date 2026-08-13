@@ -195,14 +195,14 @@ func (c *Control) handleGetDefault(w http.ResponseWriter, r *http.Request) {
 func (c *Control) handlePutDefault(w http.ResponseWriter, r *http.Request) {
 	const target = "default"
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxRuleFileBytes+1))
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxDefaultRulesetBytes+1))
 	if err != nil {
 		c.logAction(r, "put-default", target, err)
 		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if len(body) > maxRuleFileBytes {
-		err := fmt.Errorf("rules/default too large: %d bytes (limit %d)", len(body), maxRuleFileBytes)
+	if len(body) > maxDefaultRulesetBytes {
+		err := fmt.Errorf("rules/default too large: %d bytes (limit %d)", len(body), maxDefaultRulesetBytes)
 		c.logAction(r, "put-default", target, err)
 		http.Error(w, "rules/default too large", http.StatusRequestEntityTooLarge)
 		return
