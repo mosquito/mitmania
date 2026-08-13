@@ -26,10 +26,12 @@
   }
   h1 { font-size: 1.25rem; margin: 0 0 1.5rem; }
   h2 { font-size: 1rem; margin: 0 0 .75rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  h3 { font-size: .85rem; margin: 0 0 .4rem; color: var(--text); }
   .grid { display: grid; grid-template-columns: 280px 1fr; gap: 1.5rem; max-width: 1100px; }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 1.5rem; }
+  .panel.wide { grid-column: 1 / -1; }
   .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: .75rem; }
-  .stat { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: .75rem; }
+  .stat { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: .75rem; cursor: default; }
   .stat .n { font-size: 1.4rem; font-weight: 600; }
   .stat .l { font-size: .75rem; color: var(--muted); }
   a, button { color: var(--accent); }
@@ -38,6 +40,7 @@
     padding: .5rem .9rem; cursor: pointer; font-size: .85rem;
   }
   button:hover { border-color: var(--accent); }
+  button.secondary { color: var(--text); }
   .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-bottom: .75rem; }
   input[type=text] {
     background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
@@ -53,6 +56,26 @@
   .status.ok { color: var(--ok); }
   .status.err { color: var(--danger); }
   .muted { color: var(--muted); font-size: .8rem; }
+  code {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+    padding: .05rem .3rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8em;
+  }
+  pre {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: .75rem; overflow-x: auto; margin: .5rem 0 1rem;
+  }
+  pre code { background: none; border: none; padding: 0; font-size: .78rem; line-height: 1.5; }
+  details {
+    border: 1px solid var(--border); border-radius: 8px; padding: .6rem .9rem; margin-bottom: .6rem;
+    background: var(--bg);
+  }
+  details[open] { padding-bottom: .9rem; }
+  summary { cursor: pointer; font-weight: 600; font-size: .85rem; }
+  summary:hover { color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; font-size: .78rem; margin: .5rem 0; }
+  th, td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  p { line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -62,15 +85,23 @@
     <div class="panel">
       <h2>Stats</h2>
       <div class="stats" id="stats">
-        <div class="stat"><div class="n" id="s-active">—</div><div class="l">active conns</div></div>
-        <div class="stat"><div class="n" id="s-accepted">—</div><div class="l">accepted (total)</div></div>
-        <div class="stat"><div class="n" id="s-requests">—</div><div class="l">requests</div></div>
-        <div class="stat"><div class="n" id="s-cache">—</div><div class="l">cached certs</div></div>
+        <div class="stat" title="Connections currently open on any listener"><div class="n" id="s-active">—</div><div class="l">active conns</div></div>
+        <div class="stat" title="Total connections accepted since this process started"><div class="n" id="s-accepted">—</div><div class="l">accepted (total)</div></div>
+        <div class="stat" title="Total HTTP requests handled since this process started"><div class="n" id="s-requests">—</div><div class="l">requests</div></div>
+        <div class="stat" title="Leaf certificates currently in the on-disk cache (mitm:true only)"><div class="n" id="s-cache">—</div><div class="l">cached certs</div></div>
       </div>
+      <p class="muted" style="margin:.75rem 0 0">Auto-refreshes every 2s. Per-process, not cluster-wide — each node in a fleet has its own.</p>
     </div>
 
     <div class="panel">
       <h2>Root CA</h2>
+      <p class="muted" style="margin-top:0">
+        Install this on any client that needs to trust intercepted
+        (<code>mitm:true</code>) connections — otherwise those clients see a
+        certificate error. Not needed for clients that only ever hit
+        <code>mitm:false</code> rules, since those splice TLS end-to-end
+        with the origin's own real certificate.
+      </p>
       <div class="row">
         <a href="/ca.pem" download="mitmania-ca.pem"><button>Download .pem</button></a>
         <a href="/ca.der" download="mitmania-ca.der"><button>Download .der</button></a>
@@ -79,6 +110,13 @@
 
     <div class="panel">
       <h2>Maintenance</h2>
+      <p class="muted" style="margin-top:0">
+        Evicts every cached leaf certificate. Leaves are re-derived
+        deterministically from <code>clusterKey</code> on demand, so this is
+        always safe — it just costs the next intercepted connection per host
+        a fresh signing pass instead of a cache hit. Useful after rotating
+        the signing CA, or to force-drop a leaf you no longer want served.
+      </p>
       <div class="row">
         <button id="btn-flush">Flush cert cache</button>
       </div>
@@ -92,11 +130,16 @@
       <p class="muted" style="margin-top:0">
         Enter a client's source IP to view or replace its rule file.
         Changes take effect on that client's next connection — there's no
-        separate reload step.
+        separate reload step. Rules are evaluated top-down, first match
+        wins; end with <code>{"match": {}}</code> for an explicit catch-all
+        instead of relying on falling off the end (no match on a
+        connection is a fail-closed <code>511</code>). See
+        <a href="#reference">the reference below</a> for the full schema.
       </p>
       <div class="row">
         <input type="text" id="ip" placeholder="e.g. 10.0.0.5 or 2001:db8::1">
         <button id="btn-open">Open</button>
+        <button class="secondary" id="btn-example" type="button">Insert example</button>
       </div>
       <textarea id="rule-editor" placeholder="{&quot;http&quot;:[{&quot;match&quot;:{}}]}" spellcheck="false"></textarea>
       <div class="row" style="margin-top:.75rem">
@@ -105,6 +148,194 @@
       </div>
       <div class="status" id="rule-status"></div>
     </div>
+
+    <div class="panel">
+      <h2>Default rules</h2>
+      <p class="muted" style="margin-top:0">
+        Governs any client with no per-IP rule file above (including one just
+        deleted) — there's always an answer here, so a client with no
+        override never sees the bare fail-closed <code>511</code>. Keyed by
+        CIDR or sparse mask, e.g. <code>"10.0.0.0/8"</code> or
+        <code>"10.0.0.0/255.0.255.0"</code> — the plain-prefix entries for
+        each address family must together cover that whole family with no
+        gaps, or the save is rejected naming the gap. A sparse mask is a
+        pure override layered on top and doesn't count toward coverage.
+      </p>
+      <div class="row">
+        <button id="btn-default-reload">Reload</button>
+        <button class="secondary" id="btn-default-example" type="button">Insert example</button>
+      </div>
+      <textarea id="default-editor" placeholder='{&quot;0.0.0.0/0&quot;:{&quot;http&quot;:[]},&quot;::/0&quot;:{&quot;http&quot;:[]}}' spellcheck="false"></textarea>
+      <div class="row" style="margin-top:.75rem">
+        <button id="btn-default-save">Save</button>
+      </div>
+      <div class="status" id="default-status"></div>
+    </div>
+  </div>
+
+  <div class="panel wide" id="reference">
+    <h2>Reference</h2>
+    <p class="muted" style="margin-top:0">
+      Everything needed to hand-write a rule file, condensed from the actual
+      schema — expand a section below.
+    </p>
+
+    <details>
+      <summary>Rule file shape</summary>
+      <p>One rule file (per-IP or one bucket of the default table) is a single JSON object:</p>
+      <pre><code>{
+  "uuid": "&lt;uuid4, or omit and one is minted for you&gt;",
+  "auth": { "http_proxy": { ... } },
+  "http": [
+    { "match": { ... }, "mitm": true, "request": [...], "response": [...] }
+  ],
+  "egress": [
+    { "cidr": "10.0.0.0/8", "action": "deny" }
+  ]
+}</code></pre>
+      <table>
+        <tr><th>Field</th><th>Meaning</th></tr>
+        <tr><td><code>uuid</code></td><td>Stable client identity sent to outcall brokers. Optional — omit it and one is minted and persisted the first time this file is looked up.</td></tr>
+        <tr><td><code>auth</code></td><td>Optional. Proxy-Authorization credentials this client must present. See "Auth" below.</td></tr>
+        <tr><td><code>http</code></td><td>Ordered list of rules, evaluated top-down, first match wins. Required (may be empty).</td></tr>
+        <tr><td><code>egress</code></td><td>Optional. Omitted entirely = inherit the node's default egress list. Present-but-empty (<code>[]</code>) matches nothing, i.e. denies every destination — not the same as omitting the key.</td></tr>
+      </table>
+    </details>
+
+    <details>
+      <summary>Match fields (host/port/proto/path/method/header)</summary>
+      <p>
+        Every field is optional; an omitted or empty field means "match
+        anything" (<code>*</code>). Each value is either a glob
+        (<code>*</code>/<code>?</code>) or a regex prefixed
+        <code>re:</code>, e.g. <code>"re:^api\\."</code>.
+      </p>
+      <table>
+        <tr><th>Field</th><th>Phase</th><th>Matches against</th></tr>
+        <tr><td><code>host</code></td><td>connection</td><td>CONNECT/SNI/absolute-URI authority host</td></tr>
+        <tr><td><code>port</code></td><td>connection</td><td>destination port</td></tr>
+        <tr><td><code>proto</code></td><td>connection</td><td><code>"http"</code> or <code>"https"</code></td></tr>
+        <tr><td><code>path</code></td><td>message</td><td>request path</td></tr>
+        <tr><td><code>method</code></td><td>message</td><td>request method</td></tr>
+        <tr><td><code>header</code></td><td>message</td><td>a map of header name → value pattern, every entry must match</td></tr>
+      </table>
+      <p class="muted" style="margin-bottom:0">
+        Connection-phase fields decide MITM-or-splice before any bytes are
+        decrypted; message-phase fields (<code>path</code>/<code>method</code>/<code>header</code>)
+        need decrypted content and therefore force interception — a rule
+        combining them with <code>"mitm": false</code> is rejected at load,
+        not silently ignored.
+      </p>
+    </details>
+
+    <details>
+      <summary>mitm: true / false</summary>
+      <p>
+        Default is <code>true</code> when the key is omitted. <code>false</code>
+        is a raw, end-to-end encrypted splice — mitmania relays bytes without
+        ever seeing plaintext, so it can authorize only what a CONNECT/SNI/
+        absolute-URI already reveals (host, port, proto). It cannot see or
+        act on method, path, headers, or body, and none of
+        <code>request</code>/<code>response</code>/message-phase match fields
+        may be set on that rule. <code>true</code> terminates TLS under the
+        signing CA (see "Root CA" — clients need it installed), decrypts,
+        evaluates the message-phase pass, and can run <code>request</code>/
+        <code>response</code> actions.
+      </p>
+    </details>
+
+    <details>
+      <summary>Request actions</summary>
+      <table>
+        <tr><th>action</th><th>params</th><th>effect</th></tr>
+        <tr><td><code>header.add</code></td><td>flat <code>{name: value}</code> map</td><td>appends request headers</td></tr>
+        <tr><td><code>header.set</code></td><td>flat <code>{name: value}</code> map; a <code>null</code> value deletes</td><td>replaces (or deletes) request headers</td></tr>
+        <tr><td><code>raise</code></td><td><code>http</code> (status), <code>body</code> (message)</td><td>short-circuits with a synthetic error response</td></tr>
+        <tr><td><code>block</code></td><td>none</td><td>short-circuits with no response — connection resets/closes instead</td></tr>
+        <tr><td><code>webhook</code></td><td><code>socket</code> or <code>url</code> (exactly one), <code>path</code>, <code>send</code> (header allowlist), <code>failOpen</code></td><td>defers the request decision to an external broker</td></tr>
+        <tr><td><code>header.fetch</code></td><td>same as <code>webhook</code></td><td>asks a broker for headers/credentials to inject (e.g. inject an API key without exposing it to the client)</td></tr>
+      </table>
+      <p class="muted" style="margin-bottom:0">Actions run top-to-bottom in <code>request[]</code>; <code>raise</code>/<code>block</code> stop the pipeline immediately.</p>
+    </details>
+
+    <details>
+      <summary>Response actions</summary>
+      <table>
+        <tr><th>action</th><th>params</th><th>effect</th></tr>
+        <tr><td><code>header.add</code></td><td>flat <code>{name: value}</code> map</td><td>appends response headers</td></tr>
+        <tr><td><code>header.set</code></td><td>flat <code>{name: value}</code> map; a <code>null</code> value deletes</td><td>replaces (or deletes) response headers</td></tr>
+        <tr><td><code>body.replace</code></td><td><code>body</code></td><td>replaces the response body</td></tr>
+        <tr><td><code>status.set</code></td><td><code>status</code></td><td>overrides the response status code</td></tr>
+      </table>
+      <p class="muted" style="margin-bottom:0">Only reachable when <code>mitm: true</code>, since a splice never exposes a response to mutate. <code>raise</code>/<code>block</code>/<code>webhook</code>/<code>header.fetch</code> are request-only.</p>
+    </details>
+
+    <details>
+      <summary>Egress rules</summary>
+      <p>
+        <code>egress[]</code> constrains which <em>resolved destination
+        address</em> a connection may reach — independent of the host-based
+        <code>http[]</code> match, and enforced for both <code>mitm:true</code>
+        and <code>mitm:false</code> connections alike, after DNS resolution,
+        before dialing.
+      </p>
+      <pre><code>{ "cidr": "10.0.0.0/8", "port": "1-1024", "proto": "tcp", "action": "deny" }</code></pre>
+      <table>
+        <tr><th>Field</th><th>Meaning</th></tr>
+        <tr><td><code>cidr</code></td><td>Required. Destination prefix, v4 or v6.</td></tr>
+        <tr><td><code>port</code></td><td>Optional. Exact number, <code>"lo-hi"</code> range, or omitted/<code>"*"</code> for any.</td></tr>
+        <tr><td><code>proto</code></td><td>Optional. Omitted matches any.</td></tr>
+        <tr><td><code>action</code></td><td>Required. <code>"allow"</code> or <code>"deny"</code>.</td></tr>
+      </table>
+      <p class="muted" style="margin-bottom:0">
+        First match wins, same ordering discipline as <code>http[]</code>.
+        A typical list denies loopback/RFC1918/link-local first (the
+        SSRF-guard ranges), then allows everything else — those trailing
+        allow entries are load-bearing, not decorative, since no-match is
+        itself a denial.
+      </p>
+    </details>
+
+    <details>
+      <summary>Auth (Proxy-Authorization)</summary>
+      <p>Gates the explicit proxy itself, independent of which rule file ends up selected — it never chooses rules, only attributes/admits the connection.</p>
+      <pre><code>"auth": {
+  "http_proxy": {
+    "required": true,
+    "realm": "mitmania",
+    "basic": [{ "user": "alice", "hash": "$argon2id$..." }],
+    "bearer": [{ "id": "ci-token", "hash": "sha256:&lt;hex&gt;" }],
+    "broker": { "url": "https://broker.internal/auth" }
+  }
+}</code></pre>
+      <p class="muted" style="margin-bottom:0">
+        Passwords are never stored in plaintext: <code>basic[].hash</code> is
+        a canonical <code>$argon2id$...</code> PHC string, <code>bearer[].hash</code>
+        is <code>sha256:&lt;hex&gt;</code> of the presented token.
+        <code>broker</code> delegates the check to an outcall instead
+        (exactly one of <code>socket</code>/<code>url</code>, like
+        <code>webhook</code>).
+      </p>
+    </details>
+
+    <details>
+      <summary>Default rules (rules/default) keys</summary>
+      <p>
+        Each key is an address and a mask, <code>addr/mask</code>. The mask
+        is either a decimal prefix length (<code>/8</code>) or a literal
+        mask in the family's own notation (<code>/255.0.255.0</code>) — the
+        latter lets bits identifying a client be non-contiguous, e.g. two
+        fixed bytes carved out of a wider block handed out per network
+        segment.
+      </p>
+      <p class="muted" style="margin-bottom:0">
+        <code>0.0.0.0/0</code> and <code>::/0</code> are the minimum viable
+        table (one bucket per family, matching everything in it). Add more
+        specific plain-prefix entries to segment policy by subnet; add a
+        sparse-mask entry to carve out a slice of an existing block without
+        it counting toward the coverage requirement.
+      </p>
+    </details>
   </div>
 </div>
 
@@ -140,6 +371,7 @@ function currentIP() {
 // means the trailing allow-all entries are load-bearing, not decorative).
 const EXAMPLE_RULES = {
   http: [
+    { match: { host: "example.com", port: "443", proto: "https" }, mitm: false },
     { match: {} }
   ],
   egress: [
@@ -151,6 +383,54 @@ const EXAMPLE_RULES = {
     { cidr: "64:ff9b::/96", action: "allow" }
   ]
 };
+
+// buildExampleDefault mirrors the shipped worked example in
+// docs/tested/rules/default-ruleset.json: full v4/v6 coverage with a
+// deny-first egress list, plus one plain-prefix bucket and one sparse-mask
+// bucket layered on top to show both key forms in one paste-able example.
+// A function, not a static const: the two bucket uuids are minted fresh via
+// crypto.randomUUID() on every call, so pasting this example twice (or two
+// operators both clicking "Insert example") never collides two clients on
+// the same uuid.
+function buildExampleDefault() {
+  return {
+    "0.0.0.0/0": {
+      http: [],
+      egress: [
+        { cidr: "127.0.0.0/8", action: "deny" },
+        { cidr: "10.0.0.0/8", action: "deny" },
+        { cidr: "172.16.0.0/12", action: "deny" },
+        { cidr: "192.168.0.0/16", action: "deny" },
+        { cidr: "169.254.0.0/16", action: "deny" },
+        { cidr: "0.0.0.0/0", action: "allow" },
+        { cidr: "::/0", action: "allow" }
+      ]
+    },
+    "::/0": {
+      http: [],
+      egress: [
+        { cidr: "::1/128", action: "deny" },
+        { cidr: "fc00::/7", action: "deny" },
+        { cidr: "fe80::/10", action: "deny" },
+        { cidr: "0.0.0.0/0", action: "allow" },
+        { cidr: "::/0", action: "allow" }
+      ]
+    },
+    "10.0.0.0/8": {
+      uuid: crypto.randomUUID(),
+      http: [
+        { match: { host: "httpbingo.org", port: "443", proto: "https" }, mitm: false }
+      ]
+    },
+    "10.0.0.0/255.0.255.0": {
+      uuid: crypto.randomUUID(),
+      http: [
+        { match: { host: "httpbingo.org", port: "443", proto: "https" }, mitm: false },
+        { match: { host: "example.com", port: "443", proto: "https" }, mitm: false }
+      ]
+    }
+  };
+}
 
 // isEmptyRuleFile reports whether parsed is the shape a client with no
 // saved rule file reads back as ({"http":[]}, no egress key) — the case
@@ -181,6 +461,11 @@ async function openRule() {
 
 document.getElementById("btn-open").addEventListener("click", openRule);
 
+document.getElementById("btn-example").addEventListener("click", () => {
+  document.getElementById("rule-editor").value = JSON.stringify(EXAMPLE_RULES, null, 2);
+  setStatus("rule-status", "Example inserted — edit, then Save.", "");
+});
+
 // Enter in the IP field opens it, same as clicking "Open" — the input
 // isn't inside a <form>, so without this, Enter here silently did nothing.
 document.getElementById("ip").addEventListener("keydown", (e) => {
@@ -206,10 +491,42 @@ document.getElementById("btn-save").addEventListener("click", async () => {
 document.getElementById("btn-delete").addEventListener("click", async () => {
   const ip = currentIP();
   if (!ip) { setStatus("rule-status", "Enter a client IP first.", "err"); return; }
-  if (!confirm("Revoke all rules for " + ip + "? This client falls back to no-match (511) until a new rule file is saved.")) return;
+  if (!confirm("Revoke all rules for " + ip + "? This client falls back to the default rules table (rules/default) until a new rule file is saved.")) return;
   const r = await fetch("/rules/" + encodeURIComponent(ip), { method: "DELETE" });
   setStatus("rule-status", r.ok ? "Deleted." : "Delete failed: " + (await r.text()), r.ok ? "ok" : "err");
   if (r.ok) document.getElementById("rule-editor").value = "";
+});
+
+async function openDefault() {
+  setStatus("default-status", "", "");
+  const r = await fetch("/rules/default");
+  const text = await r.text();
+  let value = text;
+  try {
+    value = JSON.stringify(JSON.parse(text), null, 2);
+  } catch (e) {
+    value = text;
+  }
+  document.getElementById("default-editor").value = value;
+}
+
+document.getElementById("btn-default-reload").addEventListener("click", openDefault);
+
+document.getElementById("btn-default-example").addEventListener("click", () => {
+  document.getElementById("default-editor").value = JSON.stringify(buildExampleDefault(), null, 2);
+  setStatus("default-status", "Example inserted — edit, then Save.", "");
+});
+
+document.getElementById("btn-default-save").addEventListener("click", async () => {
+  const body = document.getElementById("default-editor").value;
+  try {
+    JSON.parse(body);
+  } catch (e) {
+    setStatus("default-status", "Not valid JSON: " + e.message, "err");
+    return;
+  }
+  const r = await fetch("/rules/default", { method: "PUT", body });
+  setStatus("default-status", r.ok ? "Saved." : "Save failed: " + (await r.text()), r.ok ? "ok" : "err");
 });
 
 document.getElementById("btn-flush").addEventListener("click", async () => {
@@ -220,6 +537,9 @@ document.getElementById("btn-flush").addEventListener("click", async () => {
 
 refreshStats();
 setInterval(refreshStats, 2000);
+// rules/default always exists (a fresh cluster is seeded with it), so
+// load it up front rather than waiting for an operator to click Reload.
+openDefault();
 </script>
 </body>
 </html>
