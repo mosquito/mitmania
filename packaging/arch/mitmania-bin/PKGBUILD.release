@@ -1,0 +1,33 @@
+# CI-only PKGBUILD used to attach mitmania-bin's own .pkg.tar.zst to a
+# GitHub Release as a downloadable asset. This is NOT what gets published to
+# AUR — AUR users get PKGBUILD (in this same directory), which always
+# fetches the release archive over the network so `makepkg`/`updpkgsums`
+# behave normally for them. This variant instead packages whatever binary,
+# systemd unit, config, and license file the release workflow has already
+# staged locally in $startdir, so the release job never re-downloads or
+# recompiles anything it just built.
+#
+# `pkgver` is substituted by the release workflow (s/@PKGVER@/.../) before
+# invoking makepkg.
+
+pkgname=mitmania-bin
+pkgver=@PKGVER@
+pkgrel=1
+pkgdesc="Distributed, fail-closed policy and interception proxy (prebuilt binary)"
+arch=('x86_64')
+url="https://docs.mitmania.com/"
+license=('custom:Hippocratic')
+depends=('ca-certificates' 'systemd')
+provides=('mitmania')
+conflicts=('mitmania')
+backup=('etc/mitmania.conf')
+options=('!debug' '!strip')
+source=('mitmania' 'mitmania.service' 'mitmania.conf' 'LICENSE')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+	install -Dm755 "$srcdir/mitmania" "$pkgdir/usr/bin/mitmania"
+	install -Dm644 "$srcdir/mitmania.service" "$pkgdir/usr/lib/systemd/system/mitmania.service"
+	install -Dm600 "$srcdir/mitmania.conf" "$pkgdir/etc/mitmania.conf"
+	install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

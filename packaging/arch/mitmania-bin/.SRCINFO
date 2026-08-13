@@ -1,0 +1,27 @@
+pkgbase = mitmania-bin
+	pkgdesc = Distributed, fail-closed policy and interception proxy (prebuilt binary)
+	pkgver = 0.4.0
+	pkgrel = 1
+	url = https://docs.mitmania.com/
+	arch = x86_64
+	arch = aarch64
+	license = custom:Hippocratic
+	depends = ca-certificates
+	depends = systemd
+	provides = mitmania
+	conflicts = mitmania
+	options = !debug
+	options = !strip
+	backup = etc/mitmania.conf
+	source = mitmania.service
+	source = mitmania.conf
+	source = LICENSE::https://raw.githubusercontent.com/mosquito/mitmania/v0.4.0/LICENSE
+	sha256sums = 08065a0c53e7995f39569ae0a8a13155a79defaaae91f71da6d8aa6be9ab643e
+	sha256sums = 83a31548ca173a4c1230dbc6d6f149a025e88a4e0c0273f0d136f44d0fa1d579
+	sha256sums = 0ee6aa1d6e1abb02a4f44230344c7cde96855cee9b529344e304889d15743bc8
+	source_x86_64 = https://github.com/mosquito/mitmania/releases/download/v0.4.0/mitmania-linux-amd64.tar.gz
+	sha256sums_x86_64 = bea948641e6ff2a1a5ac92d567614ed2ded792947852bbe3053190f8a2583ec0
+	source_aarch64 = https://github.com/mosquito/mitmania/releases/download/v0.4.0/mitmania-linux-arm64.tar.gz
+	sha256sums_aarch64 = f7d665f146fa1c26038c9001c6f091af90303d9dc9a170c2d3866a0dfb8b1dda
+
+pkgname = mitmania-bin

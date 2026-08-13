@@ -1,0 +1,31 @@
+# Maintainer: Dmitry Orlov <orlovdl@gmail.com>
+
+pkgname=mitmania-bin
+pkgver=0.4.0
+pkgrel=1
+pkgdesc="Distributed, fail-closed policy and interception proxy (prebuilt binary)"
+arch=('x86_64' 'aarch64')
+url="https://docs.mitmania.com/"
+license=('custom:Hippocratic')
+depends=('ca-certificates' 'systemd')
+provides=('mitmania')
+conflicts=('mitmania')
+backup=('etc/mitmania.conf')
+options=('!debug' '!strip')
+source_x86_64=("https://github.com/mosquito/mitmania/releases/download/v${pkgver}/mitmania-linux-amd64.tar.gz")
+source_aarch64=("https://github.com/mosquito/mitmania/releases/download/v${pkgver}/mitmania-linux-arm64.tar.gz")
+source=("mitmania.service"
+        "mitmania.conf"
+        "LICENSE::https://raw.githubusercontent.com/mosquito/mitmania/v${pkgver}/LICENSE")
+sha256sums_x86_64=('bea948641e6ff2a1a5ac92d567614ed2ded792947852bbe3053190f8a2583ec0')
+sha256sums_aarch64=('f7d665f146fa1c26038c9001c6f091af90303d9dc9a170c2d3866a0dfb8b1dda')
+sha256sums=('08065a0c53e7995f39569ae0a8a13155a79defaaae91f71da6d8aa6be9ab643e'
+            '83a31548ca173a4c1230dbc6d6f149a025e88a4e0c0273f0d136f44d0fa1d579'
+            '0ee6aa1d6e1abb02a4f44230344c7cde96855cee9b529344e304889d15743bc8')
+
+package() {
+	install -Dm755 "$srcdir/mitmania" "$pkgdir/usr/bin/mitmania"
+	install -Dm644 "$srcdir/mitmania.service" "$pkgdir/usr/lib/systemd/system/mitmania.service"
+	install -Dm600 "$srcdir/mitmania.conf" "$pkgdir/etc/mitmania.conf"
+	install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

@@ -1,0 +1,22 @@
+pkgbase = mitmania
+	pkgdesc = Distributed, fail-closed policy and interception proxy
+	pkgver = 0.4.0
+	pkgrel = 1
+	url = https://docs.mitmania.com/
+	arch = x86_64
+	arch = aarch64
+	license = custom:Hippocratic
+	makedepends = go>=1.26
+	depends = ca-certificates
+	depends = systemd
+	options = !debug
+	options = !strip
+	backup = etc/mitmania.conf
+	source = mitmania-0.4.0.tar.gz::https://github.com/mosquito/mitmania/archive/refs/tags/v0.4.0.tar.gz
+	source = mitmania.service
+	source = mitmania.conf
+	sha256sums = 8b55749872b4be60e03cd5af86b4c5ea68ee522b91cf90128e5a71d3c4324a4a
+	sha256sums = 08065a0c53e7995f39569ae0a8a13155a79defaaae91f71da6d8aa6be9ab643e
+	sha256sums = 83a31548ca173a4c1230dbc6d6f149a025e88a4e0c0273f0d136f44d0fa1d579
+
+pkgname = mitmania

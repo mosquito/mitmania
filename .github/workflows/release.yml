@@ -158,11 +158,93 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  arch-packages:
+    name: Package Arch Linux (${{ matrix.pkgarch }})
+    needs:
+      - binaries
+      - targets
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - go_target: linux-amd64
+            pkgarch: x86_64
+            platform: linux/amd64
+          - go_target: linux-arm64
+            pkgarch: aarch64
+            platform: linux/arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: mitmania-${{ matrix.go_target }}
+          path: binary-artifact
+      - uses: docker/setup-qemu-action@v3
+      - name: Stage the release binary and packaging inputs
+        shell: bash
+        env:
+          GO_TARGET: ${{ matrix.go_target }}
+          PKGARCH: ${{ matrix.pkgarch }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p arch-build
+          tar -xzf "binary-artifact/mitmania-${GO_TARGET}.tar.gz" -C arch-build
+          cp packaging/arch/mitmania.service packaging/arch/mitmania.conf LICENSE arch-build/
+          sed -e "s/@PKGVER@/${RELEASE_TAG#v}/" -e "s/^arch=('x86_64')/arch=('${PKGARCH}')/" \
+            packaging/arch/mitmania-bin/PKGBUILD.release > arch-build/PKGBUILD
+      - name: Build the package with makepkg
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          # menci/archlinuxarm:base-devel is genuinely multi-arch (real Arch
+          # Linux on amd64, real Arch Linux ARM on arm64/arm/riscv64) with
+          # base-devel preinstalled — one image covers both packages this
+          # job builds. DisableSandbox works around pacman's Landlock-based
+          # download sandbox, which isn't available under QEMU emulation.
+          # PKGEXT defaults to .pkg.tar.zst on mainline Arch but .pkg.tar.xz
+          # on Arch Linux ARM's image — force zstd on both so every matrix
+          # job in this release produces the same, predictable extension.
+          docker run --rm --platform "${PLATFORM}" -v "${PWD}/arch-build:/build" \
+            menci/archlinuxarm:base-devel bash -c '
+              set -euo pipefail
+              sed -i "s/^\[options\]/[options]\nDisableSandbox/" /etc/pacman.conf
+              sed -i "s/^PKGEXT=.*/PKGEXT=\x27.pkg.tar.zst\x27/" /etc/makepkg.conf
+              pacman -Sy --noconfirm
+              useradd -m builder
+              chown -R builder:builder /build
+              su builder -c "cd /build && makepkg -f --noconfirm"
+            '
+      - name: Verify the Arch package
+        shell: bash
+        run: |
+          set -euo pipefail
+          pkg=(arch-build/mitmania-bin-*.pkg.tar.zst)
+          test "${#pkg[@]}" -eq 1
+          tmp="$(mktemp -d)"
+          tar --zstd -xf "${pkg[0]}" -C "$tmp"
+          test "$(stat -c %a "$tmp/etc/mitmania.conf")" = 600
+          grep -Fx 'EnvironmentFile=/etc/mitmania.conf' "$tmp/usr/lib/systemd/system/mitmania.service"
+          grep -Fx 'DynamicUser=yes' "$tmp/usr/lib/systemd/system/mitmania.service"
+          cmp "arch-build/mitmania" "$tmp/usr/bin/mitmania"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mitmania-arch-${{ matrix.go_target }}
+          path: arch-build/*.pkg.tar.zst
+          if-no-files-found: error
+          retention-days: 7
+
   release-assets:
     name: Upload release assets
     needs:
       - binaries
       - debian-packages
+      - arch-packages
     runs-on: ubuntu-latest
     permissions:
       contents: write
