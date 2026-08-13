@@ -64,6 +64,14 @@ var (
 		ErrCode: "ERR_TOO_BIG",
 		Message: "Request headers too large.",
 	}
+	// RequestTimeout: the client itself (not the upstream — see
+	// ReadTimeout below) took longer than --http-timeout-client-read to
+	// deliver a complete request/ClientHello.
+	RequestTimeout = Spec{
+		Status:  http.StatusRequestTimeout, // 408
+		ErrCode: "ERR_REQUEST_TIMEOUT",
+		Message: "Timed out waiting for the request.",
+	}
 	// URITooLarge: not wired to any current caller (--http-header-limit
 	// only bounds the header block, not the request line/URI
 	// separately) — kept for parity with Squid's own ERR_* table.

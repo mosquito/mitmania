@@ -114,3 +114,28 @@ func TestHttp1Handler_EmptyConnectionLogged(t *testing.T) {
 		t.Fatalf("a connection with zero bytes sent was logged as invalid-request, not empty-connection: %q", log)
 	}
 }
+
+// TestHttp1Handler_ClientReadTimeoutLogged proves a client that opens an
+// explicit-proxy connection and never sends a complete request within
+// ClientReadTimeout gets a distinct "client-read-timeout" outcome — not
+// left to hang forever (the historical, unbounded behavior) and not
+// misclassified as an ordinary parse failure.
+func TestHttp1Handler_ClientReadTimeoutLogged(t *testing.T) {
+	handler, _ := newHappyPathHandler(t)
+	handler.ClientReadTimeout = 50 * time.Millisecond
+	buf := &syncBuffer{}
+	handler.Logger = slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	proxyAddr := runProxy(t, handler)
+
+	conn, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+	conn.Write([]byte("GET / HTTP/1.1\r\n")) // incomplete: no terminating blank line
+
+	log := waitForSubstring(t, buf, "outcome=")
+	if !strings.Contains(log, "outcome=client-read-timeout") {
+		t.Fatalf("outcome = %q, want client-read-timeout", log)
+	}
+}

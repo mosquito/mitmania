@@ -76,6 +76,16 @@ type Http1Handler struct {
 	// download doesn't time out (--http-timeout-read).
 	ReadTimeout time.Duration
 
+	// ClientReadTimeout bounds how long a newly-accepted connection
+	// (explicit or transparent) may take to deliver its first complete
+	// request/ClientHello — set as a read deadline on sess.Conn before
+	// the first peek/parse, cleared once it succeeds. Independent of
+	// ReadTimeout (the upstream leg): without this, a slow or stalled
+	// client can hold a listener slot open indefinitely, since nothing
+	// else bounds that wait (--http-timeout-client-read). Zero disables
+	// it — the historical, unbounded behavior.
+	ClientReadTimeout time.Duration
+
 	// HTTP2ConnectTimeout/HTTP2ConnectTries bound the upstream h2
 	// preface/SETTINGS exchange (--http2-timeout-connect,
 	// --http2-connect-tries); HTTP2ReadTimeout is h2RoundTripper's
@@ -265,9 +275,15 @@ func (h *Http1Handler) Serve(ctx context.Context, sess session.Session, dialer U
 	stream := newPrependConn(sess.Conn)
 	sess.Conn = stream
 	br := bufio.NewReaderSize(stream, bufioReadSize)
+	if h.ClientReadTimeout > 0 {
+		stream.SetReadDeadline(time.Now().Add(h.ClientReadTimeout))
+	}
 	req, err := h.readBoundedRequest(sess, stream, br, treq)
 	if err != nil {
 		return // readBoundedRequest already logged+ended treq's span on failure
+	}
+	if h.ClientReadTimeout > 0 {
+		stream.SetReadDeadline(time.Time{})
 	}
 	if treq.span != nil {
 		// Parsing succeeded; the actual request/tunnel gets its own,
@@ -302,6 +318,17 @@ func (h *Http1Handler) Serve(ctx context.Context, sess session.Session, dialer U
 func (h *Http1Handler) readBoundedRequest(sess session.Session, conn *prependConn, br *bufio.Reader, treq reqTrace) (*http.Request, error) {
 	err := boundNextHeaderBlock(br, conn, h.HeaderLimit)
 	if err != nil {
+		// ClientReadTimeout fired: the client (not the upstream — that's
+		// ReadTimeout/httperror.ReadTimeout) took too long to deliver a
+		// complete request. Checked before errEmptyConnection: a deadline
+		// we imposed is more specific/actionable than "the peer closed",
+		// even when zero bytes ever arrived — the connection may still be
+		// open, so it's worth attempting the 408 unlike a truly dead one.
+		if errors.Is(err, os.ErrDeadlineExceeded) {
+			httperror.WriteResponse(conn, "", httperror.RequestTimeout)
+			h.logAccessErr(sess, "", "", "client-read-timeout", httperror.RequestTimeout.Status, treq, err)
+			return nil, err
+		}
 		// A connection that closed before sending a single byte (a health
 		// check, a speculative/raced TCP connection abandoned in favor of
 		// another) never had a request to be malformed — a "400" response

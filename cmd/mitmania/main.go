@@ -128,6 +128,7 @@ func run(args []string) error {
 		HeaderLimit:         cfg.HTTPHeaderLimit,
 		BodyWindow:          cfg.HTTPBodyWindow,
 		ReadTimeout:         cfg.HTTPReadTimeout,
+		ClientReadTimeout:   cfg.HTTPClientReadTimeout,
 		HTTP2ConnectTimeout: cfg.HTTP2ConnectTimeout,
 		HTTP2ConnectTries:   cfg.HTTP2ConnectTries,
 		HTTP2ReadTimeout:    cfg.HTTP2ReadTimeout,
@@ -351,6 +352,7 @@ func logConfig(log *slog.Logger, cfg *config.Config) {
 	log.Info("config: listeners", "http_proxy", httpProxy, "https_proxy", httpsProxy, "http_tproxy", tproxy, "http_redirect", redirect, "control", cfg.Control.Network()+"://"+cfg.Control.String())
 	log.Info("config: http framing", "header_limit", cfg.HTTPHeaderLimit, "body_window", cfg.HTTPBodyWindow)
 	log.Info("config: http upstream", "connect_timeout", cfg.HTTPConnectTimeout, "read_timeout", cfg.HTTPReadTimeout, "connect_tries", cfg.HTTPConnectTries)
+	log.Info("config: http client", "read_timeout", cfg.HTTPClientReadTimeout)
 	log.Info("config: http2 upstream", "connect_timeout", cfg.HTTP2ConnectTimeout, "read_timeout", cfg.HTTP2ReadTimeout, "connect_tries", cfg.HTTP2ConnectTries)
 	log.Info("config: outcall", "connect_timeout", cfg.OutcallConnectTimeout, "read_timeout", cfg.OutcallReadTimeout, "max_inflight", cfg.OutcallMaxInflight)
 	trustedProxies := "(disabled)"

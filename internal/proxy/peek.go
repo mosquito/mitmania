@@ -101,3 +101,16 @@ type replayConn struct {
 func (c *replayConn) Read(p []byte) (int, error) {
 	return c.r.Read(p)
 }
+
+// CloseWrite half-closes the write side, if the underlying connection
+// supports it — see prependConn.CloseWrite for why this can't just be
+// promoted from the embedded net.Conn. Every transparent-mode mitm:false
+// splice goes through Replay (peeking is unconditional there, unlike
+// explicit CONNECT), so without this, relay's halfCloser optimization
+// would silently no-op for all of it.
+func (c *replayConn) CloseWrite() error {
+	if cw, ok := c.Conn.(halfCloser); ok {
+		return cw.CloseWrite()
+	}
+	return nil
+}
