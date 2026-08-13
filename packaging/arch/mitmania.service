@@ -1,0 +1,18 @@
+[Unit]
+Description=mitmania policy and interception proxy
+Documentation=https://docs.mitmania.com/
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+EnvironmentFile=/etc/mitmania.conf
+ExecStart=/usr/bin/mitmania
+DynamicUser=yes
+StateDirectory=mitmania
+RuntimeDirectory=mitmania
+UMask=0077
+Restart=on-failure
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
