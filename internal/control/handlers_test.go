@@ -3,11 +3,13 @@ package control
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"mitmania/internal/cert"
 	"mitmania/internal/flowsink"
@@ -242,6 +244,54 @@ func TestControl_HandlePutDefaultMayExceedPerClientLimit(t *testing.T) {
 	rec := serveHTTP(c, http.MethodPut, "/rules/default", strings.NewReader(body))
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204; body=%s", rec.Code, rec.Body)
+	}
+}
+
+// TestControl_HandlePutDefault_HundredThousandGeneratedHosts exercises the
+// actual synchronous compile path a fleet-wide adblock-style import runs
+// through: rules.CompileDefaultRuleset (including host-index construction)
+// blocks this handler, and only then is the result persisted. It mirrors
+// tools/adblock_to_mitmania.py's default chunking (max-regex-chars 12,000,
+// ~571 ~21-byte hosts per generated re: rule) at a combined
+// easylist/easyprivacy/AdGuard-import scale. Not a strict perf gate — CI
+// hardware varies — but a regression here means a real blocklist import
+// would start timing out or stalling the control API.
+func TestControl_HandlePutDefault_HundredThousandGeneratedHosts(t *testing.T) {
+	c, _ := newTestControl(t)
+
+	const total = 100_000
+	const perChunk = 571
+
+	var httpRules strings.Builder
+	httpRules.WriteByte('[')
+	for start := 0; start < total; start += perChunk {
+		end := min(start+perChunk, total)
+		if start > 0 {
+			httpRules.WriteByte(',')
+		}
+		httpRules.WriteString(`{"match":{"host":"re:(?i)(?:^|\\.)(?:`)
+		for i := start; i < end; i++ {
+			if i > start {
+				httpRules.WriteByte('|')
+			}
+			fmt.Fprintf(&httpRules, `trk-%06d\\.adexample\\.net`, i)
+		}
+		httpRules.WriteString(`)$"}}`)
+	}
+	httpRules.WriteString(`,{"match":{},"mitm":false}]`)
+
+	body := fmt.Sprintf(`{"0.0.0.0/0":{"http":%s},"::/0":{"http":%s}}`, httpRules.String(), httpRules.String())
+	t.Logf("generated PUT /rules/default body: %d bytes for %d hosts", len(body), total)
+
+	start := time.Now()
+	rec := serveHTTP(c, http.MethodPut, "/rules/default?validate=false", strings.NewReader(body))
+	elapsed := time.Since(start)
+	t.Logf("PUT /rules/default with %d generated hosts took %s", total, elapsed)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204; body=%s", rec.Code, rec.Body)
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("PUT /rules/default with %d hosts took %s, want well under 5s", total, elapsed)
 	}
 }
 

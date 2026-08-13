@@ -1,9 +1,12 @@
 package rules
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
+	"time"
 )
 
 func boolPtr(v bool) *bool { return &v }
@@ -163,6 +166,79 @@ func TestImportedSuffixMatcherPreservesRegexSemantics(t *testing.T) {
 			t.Errorf("match(%q) = true, want false", host)
 		}
 	}
+}
+
+// TestHostCandidateIndex_ScalesTo100kGeneratedHosts exercises the index at
+// the scale it exists for: tools/adblock_to_mitmania.py's default
+// max-regex-chars (12,000) groups roughly 570 ~21-byte hosts per generated
+// re: rule, so a combined easylist/easyprivacy/AdGuard-sized import lands
+// around 100k hosts across a couple hundred rules — not the 300-rule/1
+// host-per-rule shape the other tests and benchmark above use. This is a
+// correctness + gross-timing regression test, not a strict perf gate: CI
+// hardware varies, so the bound is generous headroom above what running
+// this locally actually measures.
+func TestHostCandidateIndex_ScalesTo100kGeneratedHosts(t *testing.T) {
+	const total = 100_000
+	const perChunk = 571
+
+	hosts := make([]string, total)
+	for i := range hosts {
+		hosts[i] = fmt.Sprintf("trk-%06d.adexample.net", i)
+	}
+
+	source := make([]Rule, 0, total/perChunk+2)
+	for start := 0; start < total; start += perChunk {
+		end := min(start+perChunk, total)
+		atoms := make([]string, 0, end-start)
+		for _, h := range hosts[start:end] {
+			atoms = append(atoms, strings.ReplaceAll(h, ".", `\.`))
+		}
+		source = append(source, Rule{
+			Match: Match{Host: `re:(?i)(?:^|\.)(?:` + strings.Join(atoms, "|") + `)$`},
+		})
+	}
+	source = append(source, Rule{Match: Match{}, MITM: boolPtr(false)})
+	t.Logf("%d generated hosts chunked into %d rules", total, len(source))
+
+	compileStart := time.Now()
+	compiled, err := Compile(RuleFile{HTTP: source})
+	if err != nil {
+		t.Fatalf("Compile: %v", err)
+	}
+	index := buildHostCandidateIndex(compiled)
+	compileElapsed := time.Since(compileStart)
+	t.Logf("compiled+indexed %d rules in %s", len(source), compileElapsed)
+	if compileElapsed > 5*time.Second {
+		t.Fatalf("compiling %d rules took %s, want well under 5s", len(source), compileElapsed)
+	}
+
+	rs := newRuleSetWithHostIndex(compiled, index, nil, "", nil)
+
+	lookupStart := time.Now()
+	for _, i := range []int{0, total / 4, total / 2, total - 1} {
+		host := "www." + hosts[i]
+		if mitm, matched := rs.LookupConn(ConnInput{Host: host, Port: "443", Proto: "https"}); !matched || !mitm {
+			t.Errorf("listed host %q (index %d) = mitm:%v matched:%v, want true/true", host, i, mitm, matched)
+		}
+	}
+	if mitm, matched := rs.LookupConn(ConnInput{Host: "not-in-any-generated-list.example", Port: "443", Proto: "https"}); !matched || mitm {
+		t.Errorf("unlisted host = mitm:%v matched:%v, want catch-all false/true", mitm, matched)
+	}
+	t.Logf("5 spot lookups across %d rules in %s", len(source), time.Since(lookupStart))
+
+	httpJSON, err := json.Marshal(source)
+	if err != nil {
+		t.Fatalf("marshal generated http policy: %v", err)
+	}
+	// rules/default repeats the identical http[] policy once per IPv4/IPv6
+	// catch-all bucket (compileParsedEntries dedups the compiled/indexed
+	// form once the bytes are identical, but the PUT body itself still
+	// carries both copies) — mirror that doubling here for a realistic
+	// comparison against internal/control's 64<<20 rules/default limit.
+	const controlMaxDefaultRulesetBytes = 64 << 20
+	doubled := 2 * len(httpJSON)
+	t.Logf("%d hosts -> %d bytes http[] JSON, %d doubled for v4+v6 (%.1f%% of the %d-byte rules/default limit)",
+		total, len(httpJSON), doubled, 100*float64(doubled)/float64(controlMaxDefaultRulesetBytes), controlMaxDefaultRulesetBytes)
 }
 
 func BenchmarkLookupConnHostCandidates(b *testing.B) {
