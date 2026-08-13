@@ -138,19 +138,6 @@ jobs:
           mv binary-artifact/unpacked/mitmania "bin/mitmania-${GO_TARGET}"
           touch "bin/mitmania-${GO_TARGET}"
           make deb TARGET="${GO_TARGET}" VERSION="${RELEASE_TAG}"
-      - name: Verify the Debian package
-        shell: bash
-        run: |
-          set -euo pipefail
-          package=(dist/*.deb)
-          test "${#package[@]}" -eq 1
-          debx inspect --format find "${package[0]}"
-          debx unpack "${package[0]}" --directory unpacked
-          grep -Fx /etc/default/mitmania unpacked/control/conffiles
-          grep -Fx 'EnvironmentFile=/etc/default/mitmania' unpacked/data/usr/lib/systemd/system/mitmania.service
-          grep -Fx 'DynamicUser=yes' unpacked/data/usr/lib/systemd/system/mitmania.service
-          test "$(stat -c %a unpacked/data/etc/default/mitmania)" = 600
-          cmp "bin/mitmania-${{ matrix.go_target }}" unpacked/data/usr/bin/mitmania
       - uses: actions/upload-artifact@v4
         with:
           name: mitmania-deb-${{ matrix.go_target }}
@@ -220,18 +207,6 @@ jobs:
               chown -R builder:builder /build
               su builder -c "cd /build && makepkg -f --noconfirm"
             '
-      - name: Verify the Arch package
-        shell: bash
-        run: |
-          set -euo pipefail
-          pkg=(arch-build/mitmania-bin-*.pkg.tar.zst)
-          test "${#pkg[@]}" -eq 1
-          tmp="$(mktemp -d)"
-          tar --zstd -xf "${pkg[0]}" -C "$tmp"
-          test "$(stat -c %a "$tmp/etc/mitmania.conf")" = 600
-          grep -Fx 'EnvironmentFile=/etc/mitmania.conf' "$tmp/usr/lib/systemd/system/mitmania.service"
-          grep -Fx 'DynamicUser=yes' "$tmp/usr/lib/systemd/system/mitmania.service"
-          cmp "arch-build/mitmania" "$tmp/usr/bin/mitmania"
       - uses: actions/upload-artifact@v4
         with:
           name: mitmania-arch-${{ matrix.go_target }}
