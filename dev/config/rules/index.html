@@ -1596,6 +1596,10 @@ gapless table keyed by IPv4/IPv6 prefixes or sparse masks and managed with
 <code>GET</code> and <code>PUT /rules/default</code>. It has its own ranking, coverage rules, and
 bootstrap seed — see <a href="../default-ruleset/">The default rule table</a>.</p>
 <p>See the exhaustive <a href="../../reference/rule-schema/">rule-file schema</a> and the two rule phases in <a href="../../concepts/identity-rules/">Identity, rules, and phases</a>.</p>
+<h2 id="rule-lookup-caching">Rule lookup caching<a class="headerlink" href="#rule-lookup-caching" title="Permanent link">&para;</a></h2>
+<p>Every connection resolves its effective rule file by checking Storage's cheap version fingerprint first — no full read — and only re-reads/recompiles when that fingerprint changed. <code>--rules-cache-ttl</code> (seconds, default <code>1</code>; <code>0</code> disables) bounds how long a resolved lookup is trusted before even checking that fingerprint again. A per-client override, "confirmed no override" (falls back to <code>rules/default</code>), and the default table itself each carry their own independent window. Within the window, a lookup returns straight from memory with no Storage call at all; once it elapses, the next lookup reconfirms — and, if the fingerprint is still unchanged, the window slides forward from that point rather than expiring on a fixed schedule.</p>
+<p>With a non-zero TTL, a lookup that's still within its window keeps serving its last-known-good result even if Storage becomes temporarily unreachable, instead of failing every connection the instant Storage blips. With <code>--rules-cache-ttl 0</code>, caching is off entirely: every connection reconfirms against Storage, and a Storage error always fails the lookup closed — the original, still-default-adjacent-but-more-cautious behavior for anyone who wants it.</p>
+<p>Independently of the TTL, recompiling a file's <code>http[]</code>/<code>egress[]</code>/<code>auth</code> is itself skipped whenever a reconfirmed reload turns out to be byte-for-byte identical to what's already compiled — e.g. a redundant re-apply of the same content, or (for <code>rules/default</code>) an edit to a different bucket in the same blob. This compares full content, never just <code>uuid</code>, so it can never mask a genuine edit.</p>
   </div>
   
   <script>
@@ -2106,6 +2110,14 @@ bootstrap seed — see <a href="../default-ruleset/">The default rule table</a>.
             class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
             data-active="false" data-depth="2" onClick="deferSetActiveTocLink('#the-default-table');">
             The default table
+        </a>
+        
+
+        
+        <a href="#rule-lookup-caching"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="2" onClick="deferSetActiveTocLink('#rule-lookup-caching');">
+            Rule lookup caching
         </a>
         
 
