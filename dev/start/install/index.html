@@ -1562,9 +1562,8 @@
   </div>
   <div class="typography w-full flex-1 *:data-[slot=alert]:first:mt-0">
     <h2 id="container-image">Container image<a class="headerlink" href="#container-image" title="Permanent link">&para;</a></h2>
-<p>Images are published to <code>ghcr.io/mosquito/mitmania</code> for <code>linux/386</code>,
-<code>linux/amd64</code>, <code>linux/arm/v7</code>, <code>linux/arm64</code>, <code>linux/ppc64le</code>,
-<code>linux/riscv64</code>, and <code>linux/s390x</code>.</p>
+<p>Images are published to <code>ghcr.io/mosquito/mitmania</code> for <code>linux/amd64</code>,
+<code>linux/arm/v7</code>, and <code>linux/arm64</code>.</p>
 <pre class="highlight"><code class="language-sh">docker run -d \
   --name mitmania \
   -p 3128:3128 \
@@ -1588,7 +1587,9 @@ sha256sum --ignore-missing -c SHA256SUMS
 tar -xzf mitmania-linux-amd64.tar.gz
 ./mitmania --help</code></pre>
 <p>Replace <code>linux-amd64</code> with the target OS/architecture (<code>darwin-arm64</code>,
-<code>windows-amd64</code>, ...); Windows archives are <code>.zip</code>.</p>
+<code>windows-amd64</code>, ...); Windows archives are <code>.zip</code>. Supported targets:
+<code>linux</code> (amd64, arm64, armv7), <code>darwin</code>/<code>freebsd</code>/<code>netbsd</code>/<code>openbsd</code> (amd64,
+arm64), and <code>windows</code> (amd64, arm64).</p>
 <h2 id="debian-or-ubuntu">Debian or Ubuntu<a class="headerlink" href="#debian-or-ubuntu" title="Permanent link">&para;</a></h2>
 <p>Download the <code>.deb</code> matching the node's architecture from the GitHub Release,
 then install it locally. For example:</p>
@@ -1608,8 +1609,7 @@ secret.</p>
 systemd creates both with private ownership for the dynamic user. The package
 does not start the service automatically because the cluster key must be set
 first.</p>
-<p>Release packages are published for <code>amd64</code>, <code>arm64</code>, <code>armhf</code>, <code>i386</code>,
-<code>ppc64el</code>, <code>riscv64</code>, and <code>s390x</code>.</p>
+<p>Release packages are published for <code>amd64</code>, <code>arm64</code>, and <code>armhf</code>.</p>
 <h2 id="build-the-current-source">Build the current source<a class="headerlink" href="#build-the-current-source" title="Permanent link">&para;</a></h2>
 <p>You need Go 1.26 or later.</p>
 <p>From a mitmania source checkout:</p>
