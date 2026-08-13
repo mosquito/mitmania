@@ -3,9 +3,13 @@ VERSION  ?= stripped
 BIN_DIR  ?= bin
 DIST_DIR ?= dist
 
-RELEASE_GOOS = aix darwin dragonfly freebsd illumos linux netbsd openbsd solaris windows
-GO_DIST_TARGETS = $(subst /,-,$(shell go tool dist list))
-RELEASE_TARGETS = $(patsubst %-arm,%-armv7,$(foreach os,$(RELEASE_GOOS),$(filter $(os)-%,$(GO_DIST_TARGETS))))
+RELEASE_TARGETS = \
+	darwin-amd64 darwin-arm64 \
+	freebsd-amd64 freebsd-arm64 \
+	linux-amd64 linux-arm64 linux-armv7 \
+	netbsd-amd64 netbsd-arm64 \
+	openbsd-amd64 openbsd-arm64 \
+	windows-amd64 windows-arm64
 
 target_os = $(word 1,$(subst -, ,$(1)))
 target_arch = $(word 2,$(subst -, ,$(1)))
@@ -19,24 +23,16 @@ RELEASE_ARCHIVES = $(foreach target,$(RELEASE_TARGETS),$(call target_archive,$(t
 NATIVE_TARGET = $(patsubst %-arm,%-armv7,$(shell go env GOOS)-$(shell go env GOARCH))
 NATIVE_BINARY = $(call target_binary,$(NATIVE_TARGET))
 
-DEB_TARGETS = linux-amd64 linux-arm64 linux-armv7 linux-386 linux-ppc64le linux-riscv64 linux-s390x
-DEB_ARCHES  = amd64 arm64 armhf i386 ppc64el riscv64 s390x
+DEB_TARGETS = linux-amd64 linux-arm64 linux-armv7
+DEB_ARCHES  = amd64 arm64 armhf
 
 DEB_ARCH_linux-amd64   = amd64
 DEB_ARCH_linux-arm64   = arm64
 DEB_ARCH_linux-armv7   = armhf
-DEB_ARCH_linux-386     = i386
-DEB_ARCH_linux-ppc64le = ppc64el
-DEB_ARCH_linux-riscv64 = riscv64
-DEB_ARCH_linux-s390x   = s390x
 
 DEB_TARGET_amd64   = linux-amd64
 DEB_TARGET_arm64   = linux-arm64
 DEB_TARGET_armhf   = linux-armv7
-DEB_TARGET_i386    = linux-386
-DEB_TARGET_ppc64el = linux-ppc64le
-DEB_TARGET_riscv64 = linux-riscv64
-DEB_TARGET_s390x   = linux-s390x
 
 TARGET ?= $(NATIVE_TARGET)
 TARGET_BINARY = $(call target_binary,$(TARGET))

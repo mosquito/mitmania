@@ -58,7 +58,7 @@ See [Choose a use case](https://docs.mitmania.com/usecases/) for the full compar
 
 ## Install
 
-Requires Go 1.26+ to build from source; prebuilt Debian/Ubuntu packages are published for `amd64`, `arm64`, `armhf`, `i386`, `ppc64el`, `riscv64`, and `s390x`.
+Requires Go 1.26+ to build from source; prebuilt Debian/Ubuntu packages are published for `amd64`, `arm64`, and `armhf`.
 
 Build from source:
 

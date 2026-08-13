@@ -304,13 +304,9 @@ jobs:
           done
 
           for target in \
-            linux-386 \
             linux-amd64 \
             linux-armv7 \
-            linux-arm64 \
-            linux-ppc64le \
-            linux-riscv64 \
-            linux-s390x; do
+            linux-arm64; do
             test -x "docker-binaries/${target}/mitmania"
           done
       - uses: docker/setup-qemu-action@v3
@@ -338,7 +334,7 @@ jobs:
           context: .
           file: Dockerfile
           push: true
-          platforms: linux/386,linux/amd64,linux/arm/v7,linux/arm64,linux/ppc64le,linux/riscv64,linux/s390x
+          platforms: linux/amd64,linux/arm/v7,linux/arm64
           build-args: |
             VERSION=${{ github.event.release.tag_name }}
           tags: ${{ steps.metadata.outputs.tags }}

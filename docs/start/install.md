@@ -2,9 +2,8 @@
 
 ## Container image
 
-Images are published to `ghcr.io/mosquito/mitmania` for `linux/386`,
-`linux/amd64`, `linux/arm/v7`, `linux/arm64`, `linux/ppc64le`,
-`linux/riscv64`, and `linux/s390x`.
+Images are published to `ghcr.io/mosquito/mitmania` for `linux/amd64`,
+`linux/arm/v7`, and `linux/arm64`.
 
 ```sh
 docker run -d \
@@ -38,7 +37,9 @@ tar -xzf mitmania-linux-amd64.tar.gz
 ```
 
 Replace `linux-amd64` with the target OS/architecture (`darwin-arm64`,
-`windows-amd64`, ...); Windows archives are `.zip`.
+`windows-amd64`, ...); Windows archives are `.zip`. Supported targets:
+`linux` (amd64, arm64, armv7), `darwin`/`freebsd`/`netbsd`/`openbsd` (amd64,
+arm64), and `windows` (amd64, arm64).
 
 ## Debian or Ubuntu
 
@@ -67,8 +68,7 @@ systemd creates both with private ownership for the dynamic user. The package
 does not start the service automatically because the cluster key must be set
 first.
 
-Release packages are published for `amd64`, `arm64`, `armhf`, `i386`,
-`ppc64el`, `riscv64`, and `s390x`.
+Release packages are published for `amd64`, `arm64`, and `armhf`.
 
 ## Build the current source
 
