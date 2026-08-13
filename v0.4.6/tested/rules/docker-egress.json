@@ -1,0 +1,22 @@
+{
+  "uuid": "docs-docker-egress",
+  "http": [
+    {
+      "match": {
+        "host": "httpbingo.org",
+        "port": "443",
+        "proto": "https"
+      },
+      "mitm": false
+    },
+    {
+      "match": {
+        "host": "example.com",
+        "port": "443",
+        "proto": "https"
+      },
+      "mitm": false
+    }
+  ]
+}
+
