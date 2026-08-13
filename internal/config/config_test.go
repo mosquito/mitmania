@@ -32,6 +32,9 @@ func TestParseHappyPath(t *testing.T) {
 	if len(cfg.ClusterKey) != 32 {
 		t.Fatalf("ClusterKey len = %d, want 32", len(cfg.ClusterKey))
 	}
+	if cfg.RulesCacheTTL != 1*time.Second {
+		t.Fatalf("RulesCacheTTL = %v, want 1s", cfg.RulesCacheTTL)
+	}
 	if cfg.HTTPHeaderLimit != 64<<10 {
 		t.Fatalf("HTTPHeaderLimit = %d, want %d", cfg.HTTPHeaderLimit, 64<<10)
 	}
@@ -665,6 +668,35 @@ func TestParseRejectsOverflowedBodyWindow(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "--http-body-window") || !strings.Contains(err.Error(), "must be >= 0") {
 		t.Fatalf("Parse: expected --http-body-window overflow error, got %v", err)
+	}
+}
+
+func TestParseAcceptsZeroRulesCacheTTL(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	cfg, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+		"--rules-cache-ttl", "0",
+	})
+	if err != nil {
+		t.Fatalf("Parse: unexpected error: %v", err)
+	}
+	if cfg.RulesCacheTTL != 0 {
+		t.Fatalf("RulesCacheTTL = %v, want 0 (caching disabled)", cfg.RulesCacheTTL)
+	}
+}
+
+func TestParseRejectsNegativeRulesCacheTTL(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	_, err := Parse([]string{
+		"--storage", "posix:///tmp/mitmania-cache",
+		"--listen-http-proxy", "tcp://*:3128",
+		"--cluster-key", validKey(),
+		"--rules-cache-ttl", "-1",
+	})
+	if err == nil || !strings.Contains(err.Error(), "--rules-cache-ttl") {
+		t.Fatalf("Parse: expected --rules-cache-ttl error, got %v", err)
 	}
 }
 

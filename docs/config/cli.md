@@ -5,6 +5,7 @@ Every flag has an automatically derived `MITMANIA_*` environment variable; a com
 | Area | Flags |
 | --- | --- |
 | Shared state | `-s, --storage`; `-k, --cluster-key`; `-c, --control` |
+| Rules | `--rules-cache-ttl` (`1` second; `0` disables — see [Rule lookup caching](rules.md#rule-lookup-caching)) |
 | Listeners | `--listen-http-proxy`; `--listen-https-proxy`; `--listen-http-tproxy`; `--listen-http-redirect` (transparent, Linux-only) |
 | HTTP bounds | `--http-header-limit` (`64k`); `--http-body-window` (`64k`) |
 | HTTP/1 timeouts | `--http-timeout-connect`; `--http-timeout-read`; `--http-connect-tries` |

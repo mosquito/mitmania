@@ -29,6 +29,9 @@ Strict control-API loading rejects unknown JSON fields, malformed JSON, invalid 
 !!! warning
     `status` is accepted for schema compatibility but is not evaluated by the current two-pass engine. Do not author policy that depends on it.
 
+!!! note
+    The rule engine notices a changed Storage key on its own (no explicit reload endpoint — see [Rule lookup caching](../config/rules.md#rule-lookup-caching)) and always picks up a genuine content edit, regardless of `uuid`. As a pure performance optimization it skips recompiling when the reloaded content turns out to be byte-identical to what's already compiled (e.g. a redundant re-apply, or an edit to a different `rules/default` bucket in the same blob) — this never masks a real change, since it compares full content, not just `uuid`.
+
 ## `rules/default`
 
 `rules/default` wraps this same per-file shape in an object keyed by address/mask entries, one bucket per key. Each bucket value is a full rule file and is validated exactly as a per-IP file is.

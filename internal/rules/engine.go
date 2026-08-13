@@ -2,6 +2,7 @@ package rules
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -183,11 +184,28 @@ type RuleEngine struct {
 	metrics *telemetry.Metrics
 	tracer  trace.Tracer
 
+	// cacheTTL bounds how long Lookup/lookupDefaultTable trust an
+	// already-resolved cache entry before reconfirming it against
+	// Storage — set by WithCacheTTL (wired to --rules-cache-ttl at the
+	// application level). Zero, the zero value and NewRuleEngine's own
+	// default, means "always reconfirm": the original per-connection
+	// Storage.Stat behavior, unchanged for any caller that doesn't
+	// opt in. A positive value trades a bounded window of policy
+	// staleness for a bounded number of Storage round-trips under load,
+	// and — independently of the TTL window — lets a cache entry that's
+	// still fresh in memory keep serving if Storage itself becomes
+	// unreachable, rather than failing every connection the instant
+	// Storage blips. It never masks a genuine compile/validation failure
+	// of content Storage did successfully return: that always fails
+	// closed (see lookupIP/lookupDefaultTable's Compile error paths).
+	cacheTTL time.Duration
+
 	mu sync.Mutex
-	// cache holds one entry per per-client override file that currently
-	// exists in Storage (rules/ip/{sha1(clientIP)}.json) — a client
-	// with no override never enters this map at all, it resolves via
-	// defaultCache instead.
+	// cache holds one entry per client this engine has ever resolved —
+	// both clients with an actual rules/ip override (exists: true) and
+	// clients confirmed to have none (exists: false, resolved via
+	// defaultCache instead) — so neither case costs a Storage.Stat on
+	// every single connection once cacheTTL is enabled.
 	cache map[netip.Addr]cachedRuleSet
 	// defaultCache is the single compiled rules/default table — there's
 	// exactly one blob, so one slot, versioned by its own storage.Version
@@ -195,15 +213,25 @@ type RuleEngine struct {
 	defaultCache *cachedDefault
 }
 
+// cachedRuleSet is one client's last-resolved override state. checkedAt is
+// when this entry was last confirmed against Storage — cacheTTL gates how
+// long it's trusted without reconfirming, and it's also what "stale but
+// still the last known-good state" falls back to on a Storage error.
 type cachedRuleSet struct {
-	version storage.Version
-	ruleSet *RuleSet
+	checkedAt time.Time
+	version   storage.Version
+	exists    bool // false: confirmed no rules/ip override exists; ruleSet is nil, resolve via the default table instead
+	ruleSet   *RuleSet
+	// contentHash is a sha256 of the source RuleFile (uuid, http, egress,
+	// auth all included) that produced ruleSet — see lookupIP's use of it.
+	contentHash [32]byte
 }
 
 type cachedDefault struct {
-	version storage.Version
-	exists  bool
-	ruleset *DefaultRuleset
+	checkedAt time.Time
+	version   storage.Version
+	exists    bool
+	ruleset   *DefaultRuleset
 }
 
 // RuleEngineOption configures NewRuleEngine.
@@ -227,6 +255,14 @@ func WithTracer(t trace.Tracer) RuleEngineOption {
 	return func(e *RuleEngine) { e.tracer = t }
 }
 
+// WithCacheTTL sets RuleEngine.cacheTTL — see its doc comment. Not calling
+// this (or passing 0) preserves NewRuleEngine's original always-reconfirm
+// behavior; every existing caller that doesn't pass this option is
+// unaffected.
+func WithCacheTTL(d time.Duration) RuleEngineOption {
+	return func(e *RuleEngine) { e.cacheTTL = d }
+}
+
 func NewRuleEngine(store *RuleStore, opts ...RuleEngineOption) *RuleEngine {
 	e := &RuleEngine{store: store, cache: map[netip.Addr]cachedRuleSet{}}
 	for _, opt := range opts {
@@ -245,14 +281,47 @@ func NewRuleEngine(store *RuleStore, opts ...RuleEngineOption) *RuleEngine {
 // "no match -> 511", the same fail-closed behavior an unconfigured fleet
 // has always had.
 func (e *RuleEngine) Lookup(ctx context.Context, client netip.Addr) (*RuleSet, error) {
-	version, exists, err := e.store.Stat(ctx, client)
-	if err != nil {
-		return nil, err
-	}
-	if exists {
-		return e.lookupIP(ctx, client, version)
+	e.mu.Lock()
+	cached, hasCache := e.cache[client]
+	e.mu.Unlock()
+
+	if hasCache && e.fresh(cached.checkedAt) {
+		return e.resolveClientCache(ctx, client, cached)
 	}
 
+	version, exists, err := e.store.Stat(ctx, client)
+	if err != nil {
+		if e.cacheTTL > 0 && hasCache {
+			e.staleFallback("client", client.String(), err)
+			return e.resolveClientCache(ctx, client, cached)
+		}
+		return nil, err
+	}
+
+	if hasCache && cached.version == version && cached.exists == exists {
+		e.touchClientCache(client, cached)
+		return e.resolveClientCache(ctx, client, cached)
+	}
+
+	if !exists {
+		entry := cachedRuleSet{checkedAt: time.Now(), version: version, exists: false}
+		e.mu.Lock()
+		e.cache[client] = entry
+		e.mu.Unlock()
+		return e.resolveClientCache(ctx, client, entry)
+	}
+
+	return e.lookupIP(ctx, client, version, cached)
+}
+
+// resolveClientCache turns a client cache entry (freshly confirmed or
+// served stale) into the RuleSet Lookup returns: the entry's own RuleSet
+// for a client with an override, or the default table's match for one
+// without.
+func (e *RuleEngine) resolveClientCache(ctx context.Context, client netip.Addr, cached cachedRuleSet) (*RuleSet, error) {
+	if cached.exists {
+		return cached.ruleSet, nil
+	}
 	def, err := e.lookupDefaultTable(ctx)
 	if err != nil {
 		return nil, err
@@ -265,15 +334,42 @@ func (e *RuleEngine) Lookup(ctx context.Context, client netip.Addr) (*RuleSet, e
 	return &RuleSet{}, nil
 }
 
-func (e *RuleEngine) lookupIP(ctx context.Context, client netip.Addr, version storage.Version) (*RuleSet, error) {
-	logID := client.String()
-
+// touchClientCache refreshes an unchanged entry's checkedAt without
+// altering its resolved content — resets the TTL window on a cheap
+// version-confirmed hit, the same way lookupIP/lookupDefaultTable do for
+// their own cache entries.
+func (e *RuleEngine) touchClientCache(client netip.Addr, cached cachedRuleSet) {
+	cached.checkedAt = time.Now()
 	e.mu.Lock()
-	cached, ok := e.cache[client]
+	e.cache[client] = cached
 	e.mu.Unlock()
-	if ok && cached.version == version {
-		return cached.ruleSet, nil
+}
+
+// fresh reports whether checkedAt is still within cacheTTL — false
+// whenever cacheTTL is 0 (disabled), so every Lookup reconfirms against
+// Storage, unchanged from the original behavior.
+func (e *RuleEngine) fresh(checkedAt time.Time) bool {
+	return e.cacheTTL > 0 && time.Since(checkedAt) < e.cacheTTL
+}
+
+// staleFallback logs that a Storage error is being masked by serving an
+// already-cached entry rather than failing the connection — kind/id name
+// which cache ("client"/client's address, or "default") is being served
+// stale.
+func (e *RuleEngine) staleFallback(kind, id string, err error) {
+	if e.log != nil {
+		e.log.Warn("rules: storage unavailable, serving last-known-good cached rules", "kind", kind, "id", id, "err", err.Error())
 	}
+}
+
+// lookupIP (re)compiles client's per-client override file. prevCache is
+// Lookup's cache entry for client before this call, if any — used only to
+// check whether the freshly loaded file's content is unchanged (see
+// compileParsedEntries's doc comment for the identical rules/default
+// case): when it is, the whole previously compiled RuleSet is reused
+// instead of recompiling.
+func (e *RuleEngine) lookupIP(ctx context.Context, client netip.Addr, version storage.Version, prevCache cachedRuleSet) (*RuleSet, error) {
+	logID := client.String()
 
 	start := time.Now()
 	if e.tracer != nil {
@@ -313,6 +409,30 @@ func (e *RuleEngine) lookupIP(ctx context.Context, client netip.Addr, version st
 		}
 	}
 
+	// A storage.Version bump doesn't always mean this file's own content
+	// changed — a redundant re-PUT of identical bytes is enough on some
+	// backends. Comparing a hash of the whole loaded RuleFile (uuid,
+	// http, egress, auth — everything) against what produced the
+	// previously cached RuleSet catches that case (and is computed from
+	// content already in hand, not an extra Storage round-trip) without
+	// the risk a uuid-only comparison would carry: any real edit, uuid
+	// bump or not, changes the hash and forces a real recompile below.
+	ruleJSON, err := json.Marshal(rf)
+	if err != nil {
+		e.compileFailed(ctx, logID, start, err)
+		return nil, err
+	}
+	hash := sha256.Sum256(ruleJSON)
+	if prevCache.exists && prevCache.ruleSet != nil && hash == prevCache.contentHash {
+		e.mu.Lock()
+		e.cache[client] = cachedRuleSet{checkedAt: time.Now(), version: version, exists: true, ruleSet: prevCache.ruleSet, contentHash: hash}
+		e.mu.Unlock()
+		if e.log != nil {
+			e.log.Info("rule file unchanged, skipped recompile", "client", logID)
+		}
+		return prevCache.ruleSet, nil
+	}
+
 	auth, err := CompileAuth(rf.Auth)
 	if err != nil {
 		e.compileFailed(ctx, logID, start, err)
@@ -334,7 +454,7 @@ func (e *RuleEngine) lookupIP(ctx context.Context, client netip.Addr, version st
 
 	e.mu.Lock()
 	_, wasCached := e.cache[client]
-	e.cache[client] = cachedRuleSet{version: version, ruleSet: rs}
+	e.cache[client] = cachedRuleSet{checkedAt: time.Now(), version: version, exists: true, ruleSet: rs, contentHash: hash}
 	e.mu.Unlock()
 
 	if e.log != nil {
@@ -380,21 +500,33 @@ func (e *RuleEngine) resolveEgress(ctx context.Context, client netip.Addr, rf Ru
 // no blob has been saved yet — callers treat that as "nothing to fall
 // back to", same as any other coverage gap.
 func (e *RuleEngine) lookupDefaultTable(ctx context.Context) (*DefaultRuleset, error) {
-	version, exists, err := e.store.StatDefault(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	e.mu.Lock()
 	cached := e.defaultCache
 	e.mu.Unlock()
+
+	if cached != nil && e.fresh(cached.checkedAt) {
+		return cached.ruleset, nil
+	}
+
+	version, exists, err := e.store.StatDefault(ctx)
+	if err != nil {
+		if e.cacheTTL > 0 && cached != nil {
+			e.staleFallback("default", "default", err)
+			return cached.ruleset, nil
+		}
+		return nil, err
+	}
+
 	if cached != nil && cached.version == version && cached.exists == exists {
+		e.mu.Lock()
+		e.defaultCache = &cachedDefault{checkedAt: time.Now(), version: version, exists: exists, ruleset: cached.ruleset}
+		e.mu.Unlock()
 		return cached.ruleset, nil
 	}
 
 	if !exists {
 		e.mu.Lock()
-		e.defaultCache = &cachedDefault{version: version, exists: false}
+		e.defaultCache = &cachedDefault{checkedAt: time.Now(), version: version, exists: false}
 		e.mu.Unlock()
 		return nil, nil
 	}
@@ -441,7 +573,11 @@ func (e *RuleEngine) lookupDefaultTable(ctx context.Context) (*DefaultRuleset, e
 		}
 	}
 
-	compiled, err := compileParsedEntries(entries)
+	var prev *DefaultRuleset
+	if cached != nil {
+		prev = cached.ruleset
+	}
+	compiled, err := compileParsedEntries(entries, prev)
 	if err != nil {
 		e.compileFailed(ctx, logID, start, err)
 		return nil, err
@@ -449,7 +585,7 @@ func (e *RuleEngine) lookupDefaultTable(ctx context.Context) (*DefaultRuleset, e
 
 	e.mu.Lock()
 	wasCached := e.defaultCache != nil && e.defaultCache.exists
-	e.defaultCache = &cachedDefault{version: version, exists: exists, ruleset: compiled}
+	e.defaultCache = &cachedDefault{checkedAt: time.Now(), version: version, exists: exists, ruleset: compiled}
 	e.mu.Unlock()
 
 	if e.log != nil {

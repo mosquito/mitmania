@@ -174,9 +174,9 @@ func TestImportedSuffixMatcherPreservesRegexSemantics(t *testing.T) {
 // re: rule, so a combined easylist/easyprivacy/AdGuard-sized import lands
 // around 100k hosts across a couple hundred rules — not the 300-rule/1
 // host-per-rule shape the other tests and benchmark above use. This is a
-// correctness + gross-timing regression test, not a strict perf gate: CI
-// hardware varies, so the bound is generous headroom above what running
-// this locally actually measures.
+// correctness test with timing logged for visibility. It deliberately has no
+// wall-clock assertion: CI runs tests under race and atomic coverage
+// instrumentation, while performance regressions belong in the benchmark.
 func TestHostCandidateIndex_ScalesTo100kGeneratedHosts(t *testing.T) {
 	const total = 100_000
 	const perChunk = 571
@@ -208,10 +208,6 @@ func TestHostCandidateIndex_ScalesTo100kGeneratedHosts(t *testing.T) {
 	index := buildHostCandidateIndex(compiled)
 	compileElapsed := time.Since(compileStart)
 	t.Logf("compiled+indexed %d rules in %s", len(source), compileElapsed)
-	if compileElapsed > 5*time.Second {
-		t.Fatalf("compiling %d rules took %s, want well under 5s", len(source), compileElapsed)
-	}
-
 	rs := newRuleSetWithHostIndex(compiled, index, nil, "", nil)
 
 	lookupStart := time.Now()
