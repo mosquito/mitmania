@@ -638,6 +638,25 @@
             
             <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class="group/menu-item relative">
     <a data-slot="sidebar-menu-button" data-active="false" data-sidebar="menu-button"
+        data-size="default" href="../../usecases/ad-blocking/"
+        class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48">
+
+        
+        Block ads and trackers without MITM
+        
+
+        
+
+        
+
+        
+    </a>
+</li>
+            
+            
+            
+            <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class="group/menu-item relative">
+    <a data-slot="sidebar-menu-button" data-active="false" data-sidebar="menu-button"
         data-size="default" href="../../usecases/egress/"
         class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48">
 
@@ -1584,7 +1603,7 @@
 <tr>
 <td><code>mitmania.requests.total</code></td>
 <td>counter</td>
-<td><code>proto</code>, <code>outcome</code>, <code>status_class</code></td>
+<td><code>proto</code>, <code>outcome</code>, <code>status_class</code>, <code>verdict</code>, <code>mitm</code></td>
 </tr>
 <tr>
 <td><code>mitmania.request.duration</code></td>
@@ -1679,6 +1698,7 @@
 </tbody>
 </table></div>
 <p>No family labels by client IP, <code>uuid</code>, host, URL, or principal; that avoids attacker-controlled cardinality. Use traces and access logs for those dimensions.</p>
+<p><code>verdict</code> (<code>allow</code>/<code>deny</code>) and <code>mitm</code> (<code>true</code>/<code>false</code>/<code>unknown</code>) are coarser groupings derived from <code>outcome</code> — <code>sum by (verdict)</code> or <code>sum by (mitm)</code> without regex-matching the full <code>outcome</code> vocabulary (see <a href="../logs/">The access record</a> for its values). <code>mitm</code> is <code>unknown</code> whenever the connection-phase mitm decision either hadn't been made yet (an auth/protocol failure ahead of connection-phase rule matching) or isn't recoverable from <code>outcome</code> alone (<code>forwarding-denied</code>/<code>resolve-fail</code>/<code>connect-fail</code> can each happen on either a <code>mitm:true</code> or <code>mitm:false</code> path) — never guessed.</p>
 <pre class="highlight"><code class="language-promql">histogram_quantile(0.95,
   sum by (le) (rate(mitmania_request_duration_seconds_bucket[5m])))</code></pre>
 <p><em>Implementation source: <code>internal/telemetry/instruments.go</code>.</em></p>
@@ -1863,6 +1883,12 @@
                         <a class="text-2xl font-medium" href="../../usecases/no-mitm/">
                             
                             Policy proxy without MITM
+                            
+                        </a>
+                        
+                        <a class="text-2xl font-medium" href="../../usecases/ad-blocking/">
+                            
+                            Block ads and trackers without MITM
                             
                         </a>
                         

@@ -638,6 +638,25 @@
             
             <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class="group/menu-item relative">
     <a data-slot="sidebar-menu-button" data-active="false" data-sidebar="menu-button"
+        data-size="default" href="../../usecases/ad-blocking/"
+        class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48">
+
+        
+        Block ads and trackers without MITM
+        
+
+        
+
+        
+
+        
+    </a>
+</li>
+            
+            
+            
+            <li data-slot="sidebar-menu-item" data-sidebar="menu-item" class="group/menu-item relative">
+    <a data-slot="sidebar-menu-button" data-active="false" data-sidebar="menu-button"
         data-size="default" href="../../usecases/egress/"
         class="peer/menu-button flex items-center gap-2 rounded-md p-2 text-left ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground relative h-[30px] w-fit overflow-visible border border-transparent text-[0.8rem] font-medium after:absolute after:inset-x-0 after:-inset-y-1 after:z-0 after:rounded-md data-[active=true]:border-accent data-[active=true]:bg-accent 3xl:fixed:w-full 3xl:fixed:max-w-48">
 
@@ -1599,6 +1618,16 @@
 <td>Same vocabulary as <code>requests.total</code>'s <code>outcome</code> label — see below</td>
 </tr>
 <tr>
+<td><code>verdict</code></td>
+<td>yes</td>
+<td><code>allow</code>/<code>deny</code>, derived from <code>outcome</code> — same as <code>requests.total</code>'s <code>verdict</code> label</td>
+</tr>
+<tr>
+<td><code>mitm</code></td>
+<td>yes</td>
+<td><code>true</code>/<code>false</code>/<code>unknown</code>, derived from <code>outcome</code> — same as <code>requests.total</code>'s <code>mitm</code> label; <code>unknown</code> when the connection-phase mitm decision wasn't yet made or isn't recoverable from <code>outcome</code> alone</td>
+</tr>
+<tr>
 <td><code>elapsed</code></td>
 <td>yes</td>
 <td>Total handling time</td>
@@ -1625,10 +1654,11 @@
 </tr>
 </tbody>
 </table></div>
-<p>Because <code>outcome</code> is identical to the metric label, a log-based alert and a metric alert classify a request the same way. Key <code>outcome</code> values:</p>
+<p>Because <code>outcome</code>/<code>verdict</code>/<code>mitm</code> are identical to their metric labels, a log-based alert and a metric alert classify a request the same way. Key <code>outcome</code> values:</p>
 <ul>
 <li><code>ok</code> — forwarded (or spliced) successfully.</li>
 <li><code>no-match</code> — no connection-phase rule matched; client got 511.</li>
+<li><code>denied</code> — a <code>connection: {"accept": false}</code> rule rejected the connection outright, before any dial or TLS termination; client got 403 on explicit listeners, a silent close on transparent ones.</li>
 <li><code>block</code> — a rule blocked it (no upstream contacted).</li>
 <li><code>forwarding-denied</code> — egress policy or the self-listener guard denied the resolved destination.</li>
 <li><code>auth-required</code> / <code>auth-failed</code> — proxy-auth gate outcomes.</li>
@@ -1639,7 +1669,7 @@
 </ul>
 <h2 id="building-alerts-and-dashboards">Building alerts and dashboards<a class="headerlink" href="#building-alerts-and-dashboards" title="Permanent link">&para;</a></h2>
 <p>Alert on <code>outcome</code> transitions the metrics can't dimension per-client: e.g. a single <code>client</code> producing sustained <code>auth-failed</code>, or <code>forwarding-denied</code> for a <code>dst</code> you expected to allow. Group by <code>acceptor</code> to separate explicit-proxy from transparent traffic. The high-cardinality fields (<code>client</code>, <code>url</code>, <code>principal</code>, <code>dst</code>) live only here and in traces — never on metrics.</p>
-<p><em>Source: <code>internal/proxy</code> (<code>http1.go</code>, <code>http2.go</code>, <code>auth.go</code>).</em></p>
+<p><em>Source: <code>internal/proxy</code> (<code>http1.go</code>, <code>http2.go</code>, <code>transparent.go</code>, <code>auth.go</code>).</em></p>
   </div>
   
   <script>
@@ -1821,6 +1851,12 @@
                         <a class="text-2xl font-medium" href="../../usecases/no-mitm/">
                             
                             Policy proxy without MITM
+                            
+                        </a>
+                        
+                        <a class="text-2xl font-medium" href="../../usecases/ad-blocking/">
+                            
+                            Block ads and trackers without MITM
                             
                         </a>
                         

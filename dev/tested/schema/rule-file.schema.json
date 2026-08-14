@@ -57,10 +57,17 @@
       "required": ["match"],
       "properties": {
         "match": {"$ref": "#/$defs/match"},
+        "connection": {"$ref": "#/$defs/connection"},
         "mitm": {"type": "boolean", "default": true},
         "request": {"type": "array", "items": {"$ref": "#/$defs/action"}},
         "response": {"type": "array", "items": {"$ref": "#/$defs/action"}}
       }
+    },
+    "connection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accept"],
+      "properties": {"accept": {"type": "boolean"}}
     },
     "match": {
       "type": "object",
