@@ -1625,6 +1625,62 @@ into one <code>re:</code> suffix pattern instead of one rule per host —
 matching stays fast even with hundreds of thousands of entries:</p>
 <pre class="highlight"><code>{"match": {"host": "re:(?i)(?:^|\\.)(?:ads\\.example|tracker\\.example)$"},
  "connection": {"accept": false}}</code></pre>
+<h2 id="generate-a-real-blocklist-automatically">Generate a real blocklist automatically<a class="headerlink" href="#generate-a-real-blocklist-automatically" title="Permanent link">&para;</a></h2>
+<p>Hand-authoring one rule per hostname doesn't scale to a real blocklist.
+<code>tools/adblock_to_mitmania.py</code> converts uBlock/AdGuard/hosts-style filter
+lists into exactly the shape above — one indexed <code>re:</code> suffix pattern per
+generated rule, <code>connection:{accept:false}</code> by default — so this is the
+ordinary way a real fleet's blocklist gets built, not a one-off script. It
+needs only Python 3's standard library; no <code>pip install</code>. See
+<a href="../../config/default-ruleset/#generate-an-advertising-and-tracker-policy">the full CLI/preset reference</a>
+for every flag.</p>
+<h3 id="1-generate-first-push-later">1. Generate first, push later<a class="headerlink" href="#1-generate-first-push-later" title="Permanent link">&para;</a></h3>
+<p>Write the generated rules to a file and inspect them before anything goes
+live. With no arguments the converter uses HaGeZi Multi Light (ads/trackers)
+plus HaGeZi TIF Mini (malware/phishing/scam/C2), pulled straight from each
+provider's maintained URL:</p>
+<pre class="highlight"><code class="language-sh">python3 tools/adblock_to_mitmania.py \
+  --output generated-rules.json \
+  --domains-output generated-domains.txt</code></pre>
+<p><code>generated-domains.txt</code> is the flat, sorted, deduplicated hostname list —
+the fastest way to spot-check what's actually being blocked before trusting
+it. Progress lines report how many rules each provider contributed and the
+final effective-domain/generated-rule counts.</p>
+<h3 id="2-apply-it-fleet-wide">2. Apply it fleet-wide<a class="headerlink" href="#2-apply-it-fleet-wide" title="Permanent link">&para;</a></h3>
+<p>Once you're satisfied, regenerate straight against the live control socket
+instead of a file. This fetches the current <code>rules/default</code>, prepends the
+generated block rules to every bucket's <code>http[]</code> (keeping each bucket's
+<code>uuid</code>, <code>auth</code>, <code>egress</code>, and any rules you've already written), and <code>PUT</code>s
+the complete replacement in one step:</p>
+<pre class="highlight"><code class="language-sh">python3 tools/adblock_to_mitmania.py \
+  --control "unix://$PWD/mitmania.sock"</code></pre>
+<p>The submitted table still goes through the same parser, compiler, coverage
+check, and control API size limit as a hand-written <code>PUT</code> — a malformed
+generation fails closed; it never applies partially.</p>
+<h3 id="3-verify">3. Verify<a class="headerlink" href="#3-verify" title="Permanent link">&para;</a></h3>
+<pre class="highlight"><code class="language-sh">curl -v https://&lt;a-domain-from-generated-domains.txt&gt;</code></pre>
+<p>Expect a clean <code>SSL_ERROR_SYSCALL</code>/connection reset — no certificate,
+because <code>connection:{accept:false}</code> never attempts TLS. Confirm the access
+log agrees:</p>
+<pre class="highlight"><code>"outcome":"denied","verdict":"deny","mitm":"false"</code></pre>
+<p>An unrelated site should be unaffected — the trailing <code>mitm:false</code> splice
+still allows anything the generated rules didn't match.</p>
+<h3 id="4-keep-it-fresh">4. Keep it fresh<a class="headerlink" href="#4-keep-it-fresh" title="Permanent link">&para;</a></h3>
+<p>Filter lists are maintained upstream and change; re-run the same command
+periodically (a systemd timer or cron job) to pick up new entries.
+Re-running is safe to repeat: the converter marks its own output with an
+internal boundary, so a fresh run replaces the <em>previous</em> generation instead
+of prepending onto it indefinitely — hand-written rules placed after that
+boundary are never touched or duplicated.</p>
+<div class="admonition warning">
+<p class="admonition-title">No exception mechanism yet</p>
+<p>Generated rules are always prepended ahead of your existing <code>http[]</code>
+rules, so first-match-wins picks a generated block before an exception
+written <em>after</em> it ever runs. To allow a hostname a preset would
+otherwise block, remove it from the source list you feed the converter
+(a local, edited copy of the filter file, or a narrower <code>--preset</code>
+selection) rather than relying on rule ordering.</p>
+</div>
 <h2 id="what-still-works">What still works<a class="headerlink" href="#what-still-works" title="Permanent link">&para;</a></h2>
 <ul>
 <li>top-down connection-phase matching on <code>host</code>, <code>port</code>, and <code>proto</code> — the
@@ -2175,6 +2231,40 @@ to reach.</p>
             data-active="false" data-depth="2" onClick="deferSetActiveTocLink('#matching-by-hostname-at-scale');">
             Matching by hostname at scale
         </a>
+        
+
+        
+        <a href="#generate-a-real-blocklist-automatically"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="2" onClick="deferSetActiveTocLink('#generate-a-real-blocklist-automatically');">
+            Generate a real blocklist automatically
+        </a>
+        
+        
+        <a href="#1-generate-first-push-later"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="3" onClick="deferSetActiveTocLink('#1-generate-first-push-later');">
+            1. Generate first, push later
+        </a>
+        
+        <a href="#2-apply-it-fleet-wide"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="3" onClick="deferSetActiveTocLink('#2-apply-it-fleet-wide');">
+            2. Apply it fleet-wide
+        </a>
+        
+        <a href="#3-verify"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="3" onClick="deferSetActiveTocLink('#3-verify');">
+            3. Verify
+        </a>
+        
+        <a href="#4-keep-it-fresh"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="3" onClick="deferSetActiveTocLink('#4-keep-it-fresh');">
+            4. Keep it fresh
+        </a>
+        
         
 
         
