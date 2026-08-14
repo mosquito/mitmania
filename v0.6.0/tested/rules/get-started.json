@@ -1,0 +1,14 @@
+{
+  "uuid": "docs-get-started",
+  "http": [
+    {
+      "match": {
+        "host": "httpbingo.org",
+        "port": "443",
+        "proto": "https"
+      },
+      "mitm": false
+    }
+  ]
+}
+

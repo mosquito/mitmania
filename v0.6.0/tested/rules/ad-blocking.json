@@ -1,0 +1,17 @@
+{
+  "uuid": "docs-ad-blocking",
+  "http": [
+    {
+      "match": {"host": "ads.example"},
+      "connection": {"accept": false}
+    },
+    {
+      "match": {"host": "re:(?i)(?:^|\\.)(?:tracker\\.example)$"},
+      "connection": {"accept": false}
+    },
+    {
+      "match": {},
+      "mitm": false
+    }
+  ]
+}
