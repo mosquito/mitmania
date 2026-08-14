@@ -26,7 +26,7 @@ func TestSetup_FullyDisabledByDefault(t *testing.T) {
 
 	// Every call site must still work: recording a metric and starting a
 	// span must not panic even though nothing is exported anywhere.
-	p.M.Request(context.Background(), "h1", "ok", "2xx", time.Millisecond)
+	p.M.Request(context.Background(), "h1", "ok", "2xx", "allow", "true", time.Millisecond)
 	_, span := p.Traces.Tracer.Start(context.Background(), "test")
 	span.End()
 }

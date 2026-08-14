@@ -6,7 +6,7 @@ Names below are OpenTelemetry names; Prometheus commonly renders dots as undersc
 | --- | --- | --- |
 | `mitmania.connections.active` | up/down counter | `listener`, `transport` |
 | `mitmania.connections.total` | counter | `listener`, `transport` |
-| `mitmania.requests.total` | counter | `proto`, `outcome`, `status_class` |
+| `mitmania.requests.total` | counter | `proto`, `outcome`, `status_class`, `verdict`, `mitm` |
 | `mitmania.request.duration` | histogram, seconds | `proto` |
 | `mitmania.bytes.streamed` | counter, bytes | `direction` |
 | `mitmania.upstream.dials.total` | counter | `result` |
@@ -27,6 +27,8 @@ Names below are OpenTelemetry names; Prometheus commonly renders dots as undersc
 | `mitmania.storage.op.duration` | histogram, seconds | `op`, `backend`, `result` |
 
 No family labels by client IP, `uuid`, host, URL, or principal; that avoids attacker-controlled cardinality. Use traces and access logs for those dimensions.
+
+`verdict` (`allow`/`deny`) and `mitm` (`true`/`false`/`unknown`) are coarser groupings derived from `outcome` — `sum by (verdict)` or `sum by (mitm)` without regex-matching the full `outcome` vocabulary (see [The access record](logs.md) for its values). `mitm` is `unknown` whenever the connection-phase mitm decision either hadn't been made yet (an auth/protocol failure ahead of connection-phase rule matching) or isn't recoverable from `outcome` alone (`forwarding-denied`/`resolve-fail`/`connect-fail` can each happen on either a `mitm:true` or `mitm:false` path) — never guessed.
 
 ```promql
 histogram_quantile(0.95,

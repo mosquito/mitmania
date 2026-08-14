@@ -143,12 +143,21 @@ func (m *Metrics) ConnectionClosed(ctx context.Context, listener, transport stri
 	m.connectionsActive.Add(ctx, -1, metric.WithAttributes(attribute.String("listener", listener), attribute.String("transport", transport)))
 }
 
-func (m *Metrics) Request(ctx context.Context, proto, outcome, statusClass string, d time.Duration) {
+// Request records one handled request/tunnel. verdict ("allow"/"deny") and
+// mitm ("true"/"false"/"unknown") are coarser, query-friendly groupings
+// derived from outcome — see proxy.classifyOutcome, this package's only
+// caller — kept alongside outcome (not replacing it) so a dashboard can
+// group by whichever granularity it needs without regex-matching outcome
+// strings. mitm is "unknown" whenever the connection-phase mitm decision
+// either hadn't been made yet or isn't recoverable from outcome alone —
+// never guessed.
+func (m *Metrics) Request(ctx context.Context, proto, outcome, statusClass, verdict, mitm string, d time.Duration) {
 	if m == nil {
 		return
 	}
 	m.requestsTotal.Add(ctx, 1, metric.WithAttributes(
-		attribute.String("proto", proto), attribute.String("outcome", outcome), attribute.String("status_class", statusClass)))
+		attribute.String("proto", proto), attribute.String("outcome", outcome), attribute.String("status_class", statusClass),
+		attribute.String("verdict", verdict), attribute.String("mitm", mitm)))
 	m.requestDuration.Record(ctx, d.Seconds(), metric.WithAttributes(attribute.String("proto", proto)))
 }
 

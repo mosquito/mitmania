@@ -219,7 +219,8 @@ func (h *Http1Handler) logAccessErr(sess session.Session, method, url, outcome s
 		h.Logger.Info("access", attrs...)
 	}
 
-	h.Metrics.Request(context.Background(), rt.proto, outcome, statusClass(status), elapsed)
+	verdict, mitm := classifyOutcome(outcome)
+	h.Metrics.Request(context.Background(), rt.proto, outcome, statusClass(status), verdict, mitm, elapsed)
 	if rt.span != nil {
 		rt.span.SetAttributes(attribute.String("outcome", outcome))
 		if status != 0 {
@@ -494,7 +495,7 @@ func (h *Http1Handler) serveConnect(ctx context.Context, sess session.Session, b
 func (h *Http1Handler) serveTunnel(ctx context.Context, sess session.Session, tunnel net.Conn, dialer UpstreamDialer, dst, sni string, connIn rules.ConnInput, mitm bool, method, reqURL string, treq reqTrace, principal string) {
 	if !mitm {
 		h.logAccess(sess, method, reqURL, "splice (mitm:false)", 0, treq)
-		rawSplice(ctx, tunnel, dialer, dst)
+		rawSplice(ctx, tunnel, dialer, dst, h.Metrics)
 		return
 	}
 
@@ -834,10 +835,13 @@ func (h *Http1Handler) handleOneRequest(ctx context.Context, sess session.Sessio
 	}
 
 	closeAfter := req.Close || resp.Close
-	if err := resp.Write(client); err != nil {
+	cw := &countingWriter{w: client}
+	if err := resp.Write(cw); err != nil {
+		h.Metrics.BytesStreamed(ctx, "down", cw.n)
 		h.logAccessErr(sess, req.Method, url, "client-write-error", resp.StatusCode, treq, err)
 		return false
 	}
+	h.Metrics.BytesStreamed(ctx, "down", cw.n)
 	h.logAccess(sess, req.Method, url, "ok", resp.StatusCode, treq)
 
 	// "WebSocket / CONNECT upgrades: after headers, switch to a raw
@@ -849,7 +853,7 @@ func (h *Http1Handler) handleOneRequest(ctx context.Context, sess session.Sessio
 	if resp.StatusCode == http.StatusSwitchingProtocols {
 		if hj, ok := roundTripper.(rawUpgrader); ok {
 			upConn, upBR := hj.Hijack()
-			relay(drainBuffered(clientBR, client), drainBuffered(upBR, upConn))
+			relay(ctx, drainBuffered(clientBR, client), drainBuffered(upBR, upConn), h.Metrics)
 		}
 		return false
 	}

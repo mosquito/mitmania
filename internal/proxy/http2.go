@@ -108,7 +108,15 @@ func (h *Http1Handler) handleH2Stream(ctx context.Context, sess session.Session,
 		return
 	}
 
+	var reqBody *countingReadCloser
+	if r.Body != nil {
+		reqBody = &countingReadCloser{ReadCloser: r.Body}
+		r.Body = reqBody
+	}
 	resp, err := upstream.RoundTrip(r)
+	if reqBody != nil {
+		h.Metrics.BytesStreamed(ctx, "up", reqBody.n) // whatever the transport actually read, even on error below
+	}
 	if err != nil {
 		spec := classifyReadErr(err)
 		httperror.Handle(w, r.URL.RequestURI(), spec)
@@ -132,10 +140,12 @@ func (h *Http1Handler) handleH2Stream(ctx context.Context, sess session.Session,
 	if rri.BodyOverride != nil {
 		w.Header().Set("Content-Length", strconv.Itoa(len(rri.BodyOverride)))
 		w.WriteHeader(status)
-		w.Write(rri.BodyOverride)
+		n, _ := w.Write(rri.BodyOverride)
+		h.Metrics.BytesStreamed(ctx, "down", int64(n))
 	} else {
 		w.WriteHeader(status)
-		io.Copy(w, resp.Body)
+		n, _ := io.Copy(w, resp.Body)
+		h.Metrics.BytesStreamed(ctx, "down", n)
 	}
 
 	h.logAccess(sess, r.Method, url, "ok", status, treq)
