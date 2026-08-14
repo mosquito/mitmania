@@ -7,6 +7,20 @@ import "sync"
 // from, never how a copy is chunked.
 const copyBufSize = 32 * 1024
 
+// newCopyBufPool constructs the *[]byte pool getCopyBuf/putCopyBuf share —
+// factored out as a constructor, rather than inlined into a single global
+// sync.Pool value, so a test can exercise the exact same reuse behavior on
+// a private instance instead of copyBufPool itself, which every concurrent
+// tunnel/response in the whole test binary shares and races against.
+func newCopyBufPool() *sync.Pool {
+	return &sync.Pool{
+		New: func() any {
+			b := make([]byte, copyBufSize)
+			return &b
+		},
+	}
+}
+
 // copyBufPool lets relay() and handleH2Stream's response-body copy reuse
 // one process-wide set of io.Copy scratch buffers instead of every
 // concurrent tunnel/response allocating (and, once idle, leaving GC and the
@@ -16,12 +30,7 @@ const copyBufSize = 32 * 1024
 // putCopyBuf call (as a naive []byte-in, take-its-address-out pair would)
 // would still allocate a small pointer wrapper on every single call, right
 // back to the kind of per-call garbage this pool exists to avoid.
-var copyBufPool = sync.Pool{
-	New: func() any {
-		b := make([]byte, copyBufSize)
-		return &b
-	},
-}
+var copyBufPool = newCopyBufPool()
 
 func getCopyBuf() *[]byte {
 	return copyBufPool.Get().(*[]byte)
