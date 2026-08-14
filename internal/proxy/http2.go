@@ -144,7 +144,9 @@ func (h *Http1Handler) handleH2Stream(ctx context.Context, sess session.Session,
 		h.Metrics.BytesStreamed(ctx, "down", int64(n))
 	} else {
 		w.WriteHeader(status)
-		n, _ := io.Copy(w, resp.Body)
+		buf := getCopyBuf()
+		n, _ := io.CopyBuffer(w, resp.Body, *buf)
+		putCopyBuf(buf)
 		h.Metrics.BytesStreamed(ctx, "down", n)
 	}
 
