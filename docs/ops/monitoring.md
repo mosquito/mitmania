@@ -2,6 +2,23 @@
 
 Expose a Prometheus endpoint with `--otel-metrics http://127.0.0.1:9464/metrics`, then scrape that exact path. The [metrics catalog](../reference/metrics.md) is the full instrument list; this page is the subset worth alerting on and how to read it.
 
+## Import the Grafana dashboard
+
+The repository includes two importable dashboards for the full metric catalog. Both cover fleet load, final policy outcomes, upstream health, Storage, rules, certificates, TLS, and broker outcalls:
+
+- [Grafana dashboard for Prometheus](../assets/mitmania-grafana.json) uses Grafana's built-in Prometheus data source.
+- [Grafana dashboard for VictoriaMetrics](../assets/mitmania-victoriametrics-grafana.json) uses the official [`victoriametrics-metrics-datasource`](https://docs.victoriametrics.com/victoriametrics/integrations/grafana/datasource/) plugin. Its queries use the PromQL subset of MetricsQL, so the panels have the same semantics as the Prometheus version.
+
+1. Configure Prometheus, vmagent, or VictoriaMetrics' native scraper to scrape every mitmania node's metrics endpoint.
+2. In Grafana, import the JSON file matching the metrics backend.
+3. Select the backend data source when Grafana prompts for `DS_PROMETHEUS` or `DS_VICTORIAMETRICS`.
+4. Use the dashboard's **Scrape job** and **Instance** variables to select the fleet or node to inspect.
+5. If `--outcall-max-inflight` is not its default of `64`, set **Outcall capacity** to the configured value so the saturation gauge is accurate.
+
+For single-node VictoriaMetrics, point its Grafana data source at `http://<victoriametrics>:8428`. For a cluster, use the vmselect query endpoint `http://<vmselect>:8481/select/<tenant>/prometheus`.
+
+The dashboard treats `splice (mitm:false)` as successful raw encrypted traffic and `empty-connection` as neutral listener churn. It keeps `no-match`, `forwarding-denied`, authentication failures, and deliberate rule blocks distinct so policy behavior is not confused with upstream failure. Panels for message-phase TTFB, bytes, TLS termination, certificates, and outcalls remain empty until those paths are exercised; that is expected on a pure `mitm:false` deployment.
+
 ## Signals that matter
 
 | Watch | Metric (label values) | Healthy | Alert when — and why |
