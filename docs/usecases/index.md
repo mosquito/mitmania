@@ -3,6 +3,7 @@
 | Goal | MITM? | Listeners | Key configuration | CA install? |
 | --- | --- | --- | --- | --- |
 | [Policy proxy](no-mitm.md) | No | explicit | `mitm:false`, `http[]` | No |
+| [Block ads and trackers](ad-blocking.md) | No | explicit or transparent | `connection:{accept:false}` | No |
 | [Egress firewall / SSRF guard](egress.md) | No | explicit | `egress[]`, deny first | No |
 | [Authenticated proxy](auth-proxy.md) | Optional | explicit | `auth.http_proxy` | Only with MITM |
 | [Inject credentials](injection.md) | Yes | explicit or transparent | `header.fetch` | Yes |

@@ -142,9 +142,13 @@ func (h *Http1Handler) serveTransparentTLS(ctx context.Context, sess session.Ses
 		treq.withPrincipal(principal)
 	}
 
-	mitm, matched := ruleSet.LookupConn(connIn)
+	mitm, deny, matched := ruleSet.LookupConn(connIn)
 	if !matched {
 		h.logAccess(sess, method, reqURL, "no-match", 0, treq)
+		return
+	}
+	if deny {
+		h.logAccess(sess, method, reqURL, "denied", 0, treq)
 		return
 	}
 
@@ -227,9 +231,13 @@ func (h *Http1Handler) serveTransparentOpaque(ctx context.Context, sess session.
 		treq.withPrincipal(principal)
 	}
 
-	mitm, matched := ruleSet.LookupConn(connIn)
+	mitm, deny, matched := ruleSet.LookupConn(connIn)
 	if !matched {
 		h.logAccess(sess, method, reqURL, "no-match", 0, treq)
+		return
+	}
+	if deny {
+		h.logAccess(sess, method, reqURL, "denied", 0, treq)
 		return
 	}
 
@@ -323,8 +331,11 @@ func (h *Http1Handler) serveTransparentOpaqueMITM(ctx context.Context, sess sess
 	}
 	req.Header.Del("Proxy-Authorization") // hop-by-hop, never forwarded upstream — same as serveAbsoluteForm
 
-	if _, matched := ruleSet.LookupConn(connIn); !matched {
+	if _, deny, matched := ruleSet.LookupConn(connIn); !matched {
 		h.logAccess(sess, req.Method, reqURL, "no-match", 0, treq)
+		return
+	} else if deny {
+		h.logAccess(sess, req.Method, reqURL, "denied", 0, treq)
 		return
 	}
 

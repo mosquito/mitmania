@@ -175,7 +175,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Requests denied by security gates, broken out by reason: no matching connection rule, egress/self-listener refusal, or proxy authentication missing/failed. Deliberate rule blocks are charted below but excluded here — a rule author choosing to block is not a security-gate denial.",
+      "description": "Requests denied by connection-phase gates, broken out by reason: no matching connection rule, an explicit connection.accept:false rule, egress/self-listener refusal, or proxy authentication missing/failed. A mitm:true rule's later message-phase block is charted below but excluded here — that only runs after interception already succeeded, not before it.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -221,7 +221,7 @@
             "lastNotNull"
           ],
           "fields": "",
-          "values": true
+          "values": false
         },
         "showPercentChange": false,
         "textMode": "auto",
@@ -231,8 +231,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum by (outcome) (rate(mitmania_requests_total{job=~\"$job\",instance=~\"$instance\",outcome=~\"no-match|forwarding-denied|auth-failed|auth-required\"}[$__rate_interval]))",
-          "legendFormat": "{{outcome}}",
+          "expr": "sum(rate(mitmania_requests_total{job=~\"$job\",instance=~\"$instance\",outcome=~\"no-match|forwarding-denied|auth-failed|auth-required|denied\"}[$__rate_interval]))",
+          "legendFormat": "denied/s",
           "range": true,
           "refId": "A"
         }

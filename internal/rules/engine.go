@@ -78,24 +78,27 @@ func (rs *RuleSet) HTTPRules() []CompiledRule { return rs.rules }
 // LookupConn is the connection-phase first-match pass: only
 // host/port/proto are visible. matched is false when no rule's
 // connection-phase predicate matched at all — the caller then fails
-// closed with a 511 rather than letting the connection through.
-func (rs *RuleSet) LookupConn(in ConnInput) (mitm bool, matched bool) {
+// closed with a 511 rather than letting the connection through. deny is
+// true when the matched rule rejects the connection outright (see
+// Rule.Connection) — the caller must not dial or attempt TLS termination
+// at all in that case; mitm is meaningless (always false) when deny is true.
+func (rs *RuleSet) LookupConn(in ConnInput) (mitm bool, deny bool, matched bool) {
 	if rs.hostIndex == nil {
 		for _, r := range rs.rules {
 			if r.connHost.match(in.Host) && r.connPort.match(in.Port) && r.connProto.match(in.Proto) {
-				return r.mitm, true
+				return r.mitm, r.deny, true
 			}
 		}
-		return false, false
+		return false, false, false
 	}
 	var local [32]int
 	for _, ruleID := range rs.hostIndex.appendCandidates(in.Host, local[:0]) {
 		r := &rs.rules[ruleID]
 		if r.connHost.match(in.Host) && r.connPort.match(in.Port) && r.connProto.match(in.Proto) {
-			return r.mitm, true
+			return r.mitm, r.deny, true
 		}
 	}
-	return false, false
+	return false, false, false
 }
 
 // LookupRequest is the message-phase first-match pass: the single
@@ -106,6 +109,9 @@ func (rs *RuleSet) LookupRequest(in MsgInput) (*CompiledRule, bool) {
 	if rs.hostIndex == nil {
 		for i := range rs.rules {
 			r := &rs.rules[i]
+			if r.deny {
+				continue // never reaches a message phase to be selected in
+			}
 			if !r.connHost.match(in.Host) || !r.connPort.match(in.Port) || !r.connProto.match(in.Proto) {
 				continue
 			}
@@ -122,6 +128,9 @@ func (rs *RuleSet) LookupRequest(in MsgInput) (*CompiledRule, bool) {
 	var local [32]int
 	for _, ruleID := range rs.hostIndex.appendCandidates(in.Host, local[:0]) {
 		r := &rs.rules[ruleID]
+		if r.deny {
+			continue
+		}
 		if !r.connHost.match(in.Host) || !r.connPort.match(in.Port) || !r.connProto.match(in.Proto) {
 			continue
 		}

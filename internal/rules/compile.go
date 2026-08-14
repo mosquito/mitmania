@@ -105,6 +105,7 @@ type CompiledRule struct {
 	msgHeader                     map[string]matcher // canonicalized header name -> value matcher
 
 	mitm     bool
+	deny     bool // connection-phase reject — no dial, no TLS, no message phase ever
 	hasMsg   bool // true if Match set path/method/header — forces interception
 	request  []CompiledAction
 	response []CompiledAction
@@ -166,6 +167,33 @@ func compileRule(r Rule) (CompiledRule, error) {
 
 	if !cr.mitm && cr.hasMsg {
 		return cr, fmt.Errorf("mitm:false rule cannot carry message-phase match fields (path/method/header)")
+	}
+
+	if r.Connection != nil {
+		if r.Connection.Accept == nil {
+			return cr, fmt.Errorf(`connection.accept is required when "connection" is present`)
+		}
+		if !*r.Connection.Accept {
+			cr.deny = true
+			// r.mitm() defaulted cr.mitm to true above (nil MITM means
+			// "default true" for an ordinary rule) — meaningless here
+			// since mitm is never decided for a denied connection. Zero
+			// it out so the compiled representation doesn't leak that
+			// arbitrary default to callers (LookupConn documents mitm as
+			// always false when deny is true).
+			cr.mitm = false
+			if r.MITM != nil {
+				return cr, fmt.Errorf("a rule with connection.accept:false cannot also set mitm — mitm is never decided for a rejected connection")
+			}
+			if cr.hasMsg {
+				return cr, fmt.Errorf("a rule with connection.accept:false cannot carry message-phase match fields (path/method/header) — it never reaches a message phase")
+			}
+			if len(r.Request) > 0 || len(r.Response) > 0 {
+				return cr, fmt.Errorf("a rule with connection.accept:false cannot carry request/response actions — it never reaches a message phase")
+			}
+		}
+		// accept:true is the (already-default) phase-1 behavior stated
+		// explicitly — a no-op, imposes none of the restrictions above.
 	}
 
 	if cr.request, err = compileActions(r.Request, validRequestActions, "request"); err != nil {

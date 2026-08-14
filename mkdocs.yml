@@ -57,6 +57,7 @@ nav:
   - Use cases:
       - Overview: usecases/index.md
       - Policy proxy without MITM: usecases/no-mitm.md
+      - Block ads and trackers without MITM: usecases/ad-blocking.md
       - Egress firewall & SSRF guard: usecases/egress.md
       - Authenticating forward proxy: usecases/auth-proxy.md
       - Header & credential injection: usecases/injection.md

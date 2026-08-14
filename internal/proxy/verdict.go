@@ -26,6 +26,11 @@ func classifyOutcome(outcome string) (verdict, mitm string) {
 		// and a mitm:false rule cannot carry message-phase fields —
 		// see CLAUDE.md's mitm:false invariant).
 		return "deny", "true"
+	case "denied":
+		// A connection: {"accept": false} match — no dial, no TLS
+		// termination ever attempted, so unlike the other deny outcomes
+		// mitm is confidently "false" here, not "unknown".
+		return "deny", "false"
 	default:
 		return "deny", "unknown"
 	}

@@ -15,6 +15,7 @@ func TestClassifyOutcome(t *testing.T) {
 		{"outcall-denied", "deny", "true"},
 		{"outcall-fail", "deny", "true"},
 		{"raise", "deny", "true"},
+		{"denied", "deny", "false"},
 		// Genuinely undetermined: either an early failure ahead of the
 		// connection-phase rule match, or a later one (forwarding-denied,
 		// resolve-fail, connect-fail) reachable from either mitm value.

@@ -165,6 +165,18 @@ var (
 		Message: "Forwarding to this address is not permitted.",
 	}
 
+	// RuleDenied is a connection: {"accept": false} match: the operator
+	// rejected this host/port/proto outright, before any dial or TLS
+	// termination was attempted — distinct from ForwardingDenied (an
+	// egress-policy refusal of a resolved address) and from a
+	// mitm:true rule's request-phase block, both of which happen later
+	// and (for block) only after interception.
+	RuleDenied = Spec{
+		Status:  http.StatusForbidden, // 403
+		ErrCode: "ERR_RULE_DENIED",
+		Message: "This connection is denied by policy.",
+	}
+
 	// MisdirectedRequest is Http2Bridge's coalescing defense: an h2 stream
 	// whose :authority doesn't match the single host this connection was
 	// actually dialed for gets rejected rather than served, forcing the

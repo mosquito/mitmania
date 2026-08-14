@@ -29,13 +29,13 @@ func TestHostCandidateIndex_ImportedSuffixFirstMatchOrdering(t *testing.T) {
 		{Match: Match{}, MITM: boolPtr(false)},
 	})
 
-	if mitm, matched := rs.LookupConn(ConnInput{Host: "ads.example", Port: "443", Proto: "https"}); !matched || mitm {
+	if mitm, _, matched := rs.LookupConn(ConnInput{Host: "ads.example", Port: "443", Proto: "https"}); !matched || mitm {
 		t.Fatalf("ads.example = mitm:%v matched:%v, want first fallback rule's false/true", mitm, matched)
 	}
-	if mitm, matched := rs.LookupConn(ConnInput{Host: "sub.tracker.example", Port: "443", Proto: "https"}); !matched || !mitm {
+	if mitm, _, matched := rs.LookupConn(ConnInput{Host: "sub.tracker.example", Port: "443", Proto: "https"}); !matched || !mitm {
 		t.Fatalf("sub.tracker.example = mitm:%v matched:%v, want indexed true/true", mitm, matched)
 	}
-	if mitm, matched := rs.LookupConn(ConnInput{Host: "ordinary.example", Port: "443", Proto: "https"}); !matched || mitm {
+	if mitm, _, matched := rs.LookupConn(ConnInput{Host: "ordinary.example", Port: "443", Proto: "https"}); !matched || mitm {
 		t.Fatalf("ordinary.example = mitm:%v matched:%v, want catch-all false/true", mitm, matched)
 	}
 }
@@ -47,10 +47,10 @@ func TestHostCandidateIndex_ExceptionCanPrecedeParentBlock(t *testing.T) {
 		{Match: Match{}, MITM: boolPtr(false)},
 	})
 
-	if mitm, _ := rs.LookupConn(ConnInput{Host: "sub.allowed.ads.example"}); mitm {
+	if mitm, _, _ := rs.LookupConn(ConnInput{Host: "sub.allowed.ads.example"}); mitm {
 		t.Fatal("specific exception lost first-match precedence to parent block")
 	}
-	if mitm, _ := rs.LookupConn(ConnInput{Host: "other.ads.example"}); !mitm {
+	if mitm, _, _ := rs.LookupConn(ConnInput{Host: "other.ads.example"}); !mitm {
 		t.Fatal("parent suffix block did not match sibling hostname")
 	}
 }
@@ -73,7 +73,7 @@ func TestHostCandidateIndex_AllowBetweenDenyRulesPreservesOrder(t *testing.T) {
 		{"unrelated.example", false},
 	}
 	for _, tc := range cases {
-		mitm, matched := rs.LookupConn(ConnInput{Host: tc.host})
+		mitm, _, matched := rs.LookupConn(ConnInput{Host: tc.host})
 		if !matched || mitm != tc.wantMITM {
 			t.Errorf("LookupConn(%q) = mitm:%v matched:%v, want %v/true", tc.host, mitm, matched, tc.wantMITM)
 		}
@@ -88,10 +88,10 @@ func TestHostCandidateIndex_WildcardUsesExistingFullMatcher(t *testing.T) {
 
 	// path.Match's existing whole-host '*' semantics include dots. The tree
 	// indexes only example.com and leaves this final decision to matcher.match.
-	if mitm, _ := rs.LookupConn(ConnInput{Host: "a.b.example.com"}); !mitm {
+	if mitm, _, _ := rs.LookupConn(ConnInput{Host: "a.b.example.com"}); !mitm {
 		t.Fatal("wildcard rule semantics changed during indexing")
 	}
-	if mitm, _ := rs.LookupConn(ConnInput{Host: "example.com"}); mitm {
+	if mitm, _, _ := rs.LookupConn(ConnInput{Host: "example.com"}); mitm {
 		t.Fatal("wildcard candidate bypassed full matcher verification")
 	}
 }
@@ -119,7 +119,7 @@ func TestHostCandidateIndex_MoreThanStackCandidateCapacity(t *testing.T) {
 	source = append(source, Rule{Match: Match{}, MITM: boolPtr(false)})
 	rs := compileIndexedRuleSet(t, source)
 
-	if mitm, matched := rs.LookupConn(ConnInput{Host: "example.com", Port: "443"}); !matched || mitm {
+	if mitm, _, matched := rs.LookupConn(ConnInput{Host: "example.com", Port: "443"}); !matched || mitm {
 		t.Fatalf("overflow candidate lookup = mitm:%v matched:%v, want false/true", mitm, matched)
 	}
 }
@@ -213,11 +213,11 @@ func TestHostCandidateIndex_ScalesTo100kGeneratedHosts(t *testing.T) {
 	lookupStart := time.Now()
 	for _, i := range []int{0, total / 4, total / 2, total - 1} {
 		host := "www." + hosts[i]
-		if mitm, matched := rs.LookupConn(ConnInput{Host: host, Port: "443", Proto: "https"}); !matched || !mitm {
+		if mitm, _, matched := rs.LookupConn(ConnInput{Host: host, Port: "443", Proto: "https"}); !matched || !mitm {
 			t.Errorf("listed host %q (index %d) = mitm:%v matched:%v, want true/true", host, i, mitm, matched)
 		}
 	}
-	if mitm, matched := rs.LookupConn(ConnInput{Host: "not-in-any-generated-list.example", Port: "443", Proto: "https"}); !matched || mitm {
+	if mitm, _, matched := rs.LookupConn(ConnInput{Host: "not-in-any-generated-list.example", Port: "443", Proto: "https"}); !matched || mitm {
 		t.Errorf("unlisted host = mitm:%v matched:%v, want catch-all false/true", mitm, matched)
 	}
 	t.Logf("5 spot lookups across %d rules in %s", len(source), time.Since(lookupStart))
