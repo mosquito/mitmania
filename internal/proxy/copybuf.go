@@ -2,16 +2,12 @@ package proxy
 
 import "sync"
 
-// copyBufSize matches io.Copy's own default scratch-buffer size (see the
-// unexported io.copyBuffer), so pooling changes only where the buffer comes
-// from, never how a copy is chunked.
+// copyBufSize matches io.Copy's own default scratch-buffer size, so
+// pooling changes only where the buffer comes from, not how a copy chunks.
 const copyBufSize = 32 * 1024
 
-// newCopyBufPool constructs the *[]byte pool getCopyBuf/putCopyBuf share —
-// factored out as a constructor, rather than inlined into a single global
-// sync.Pool value, so a test can exercise the exact same reuse behavior on
-// a private instance instead of copyBufPool itself, which every concurrent
-// tunnel/response in the whole test binary shares and races against.
+// newCopyBufPool is factored out from copyBufPool so tests can use a
+// private instance instead of racing the shared, process-wide one.
 func newCopyBufPool() *sync.Pool {
 	return &sync.Pool{
 		New: func() any {
@@ -21,15 +17,10 @@ func newCopyBufPool() *sync.Pool {
 	}
 }
 
-// copyBufPool lets relay() and handleH2Stream's response-body copy reuse
-// one process-wide set of io.Copy scratch buffers instead of every
-// concurrent tunnel/response allocating (and, once idle, leaving GC and the
-// runtime's own page-release schedule to eventually reclaim) its own fresh
-// 32KiB buffer. Pool values are *[]byte, and getCopyBuf/putCopyBuf pass that
-// same pointer through unchanged end to end — boxing a fresh &b on every
-// putCopyBuf call (as a naive []byte-in, take-its-address-out pair would)
-// would still allocate a small pointer wrapper on every single call, right
-// back to the kind of per-call garbage this pool exists to avoid.
+// copyBufPool lets relay() and handleH2Stream reuse io.Copy scratch
+// buffers instead of each call allocating its own. Values are *[]byte,
+// passed through unchanged by getCopyBuf/putCopyBuf — Put-ing a fresh &b
+// each call would allocate a pointer wrapper every time.
 var copyBufPool = newCopyBufPool()
 
 func getCopyBuf() *[]byte {

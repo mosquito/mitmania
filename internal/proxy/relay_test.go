@@ -6,11 +6,8 @@ import (
 	"testing"
 )
 
-// tcpLoopbackPair returns two ends of a real TCP connection — a's remote
-// peer is b's local end and vice versa — so isSpliceCapable/pooledCopy can
-// be exercised against a genuine *net.TCPConn, not a fake/mock net.Conn
-// that wouldn't exhibit the exact behavior this code depends on (Go 1.26's
-// *net.TCPConn implementing both io.ReaderFrom and io.WriterTo).
+// tcpLoopbackPair returns two ends of a real TCP connection, needed since
+// isSpliceCapable/pooledCopy depend on *net.TCPConn's concrete type.
 func tcpLoopbackPair(t *testing.T) (a, b net.Conn) {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -41,13 +38,8 @@ func tcpLoopbackPair(t *testing.T) (a, b net.Conn) {
 	return client, server
 }
 
-// TestIsSpliceCapable_RawTCPConnVsWrapped proves the discriminator
-// pooledCopy relies on: a raw *net.TCPConn reports splice-capable (it
-// implements both io.ReaderFrom and io.WriterTo as of Go 1.26), while
-// prependConn/replayConn — every real client/tunnel connection this proxy
-// hands to relay() once it's been peeked or has replay bytes prepended —
-// do not, since embedding net.Conn as an interface only promotes the
-// interface's own method set, never a concrete value's extra methods.
+// TestIsSpliceCapable_RawTCPConnVsWrapped checks a raw TCPConn reports
+// splice-capable while prependConn/replayConn wrappers don't.
 func TestIsSpliceCapable_RawTCPConnVsWrapped(t *testing.T) {
 	a, b := tcpLoopbackPair(t)
 
@@ -66,10 +58,8 @@ func TestIsSpliceCapable_RawTCPConnVsWrapped(t *testing.T) {
 	}
 }
 
-// TestHideFastPath_HidesReadFromWriteTo proves hideFastPath actually
-// removes visibility of ReadFrom/WriteTo from io.CopyBuffer's perspective
-// — the mechanism pooledCopy depends on to force a raw TCPConn side to
-// honor the pooled buffer instead of dispatching straight past it.
+// TestHideFastPath_HidesReadFromWriteTo checks hideFastPath actually hides
+// ReadFrom/WriteTo from io.CopyBuffer's type assertions.
 func TestHideFastPath_HidesReadFromWriteTo(t *testing.T) {
 	a, _ := tcpLoopbackPair(t)
 
@@ -87,9 +77,7 @@ func TestHideFastPath_HidesReadFromWriteTo(t *testing.T) {
 }
 
 // TestPooledCopy_CleanPairByteCorrect and TestPooledCopy_WrappedPairByteCorrect
-// prove pooledCopy's two branches both still copy bytes correctly — the
-// strategy it picks changes where the buffer comes from (or whether one is
-// used at all), never what ends up on the wire.
+// check both of pooledCopy's branches still copy bytes correctly.
 
 func TestPooledCopy_CleanPairByteCorrect(t *testing.T) {
 	src, srcPeer := tcpLoopbackPair(t)
