@@ -229,6 +229,31 @@
     </details>
 
     <details>
+      <summary>connection: {accept: false}</summary>
+      <p>
+        Phase 1 (connection checks), evaluated before <code>mitm</code>
+        (phase 2, rule matching) applies at all. <code>{"accept": false}</code>
+        rejects the connection outright — no dial, no TLS termination, no
+        certificate ever presented, so the client needs no CA trust. This
+        is the only way to reject purely by host/port/proto (e.g. SNI):
+        <code>mitm: true</code> + a request-phase <code>block</code>/<code>raise</code>
+        action can also reject, but only after terminating TLS to reach
+        the message phase.
+      </p>
+      <p class="muted" style="margin-bottom:0">
+        <code>accept</code> is required when <code>connection</code> is
+        present. <code>accept: true</code> is valid and is just the
+        already-default phase-1 behavior stated explicitly — a no-op that
+        composes freely with <code>mitm</code>/message fields/actions
+        (useful as a self-documenting exception ahead of a broader
+        <code>accept: false</code> rule). <code>accept: false</code> cannot
+        be combined with <code>mitm</code>, message-phase match fields, or
+        <code>request</code>/<code>response</code> actions — rejected at
+        load, not silently ignored.
+      </p>
+    </details>
+
+    <details>
       <summary>mitm: true / false</summary>
       <p>
         Default is <code>true</code> when the key is omitted. <code>false</code>
@@ -371,6 +396,7 @@ function currentIP() {
 // means the trailing allow-all entries are load-bearing, not decorative).
 const EXAMPLE_RULES = {
   http: [
+    { match: { host: "ads.example" }, connection: { accept: false } },
     { match: { host: "example.com", port: "443", proto: "https" }, mitm: false },
     { match: {} }
   ],

@@ -194,6 +194,7 @@ func (h *Http1Handler) logAccess(sess session.Session, method, url, outcome stri
 // omitted from the record when nil.
 func (h *Http1Handler) logAccessErr(sess session.Session, method, url, outcome string, status int, rt reqTrace, err error) {
 	elapsed := time.Since(rt.start)
+	verdict, mitm := classifyOutcome(outcome)
 
 	if h.Logger != nil && !h.NoAccessLog {
 		attrs := []any{
@@ -202,6 +203,8 @@ func (h *Http1Handler) logAccessErr(sess session.Session, method, url, outcome s
 			slog.String("method", method),
 			slog.String("url", url),
 			slog.String("outcome", outcome),
+			slog.String("verdict", verdict),
+			slog.String("mitm", mitm),
 			slog.Duration("elapsed", elapsed),
 		}
 		if rt.dst != "" {
@@ -219,7 +222,7 @@ func (h *Http1Handler) logAccessErr(sess session.Session, method, url, outcome s
 		h.Logger.Info("access", attrs...)
 	}
 
-	h.Metrics.Request(context.Background(), rt.proto, outcome, statusClass(status), elapsed)
+	h.Metrics.Request(context.Background(), rt.proto, outcome, statusClass(status), verdict, mitm, elapsed)
 	if rt.span != nil {
 		rt.span.SetAttributes(attribute.String("outcome", outcome))
 		if status != 0 {
@@ -394,10 +397,15 @@ func (h *Http1Handler) serveConnect(ctx context.Context, sess session.Session, b
 		treq.withPrincipal(principal)
 	}
 
-	mitm, matched := ruleSet.LookupConn(connIn)
+	mitm, deny, matched := ruleSet.LookupConn(connIn)
 	if !matched {
 		httperror.WriteResponse(conn, reqURL, httperror.NoMatch)
 		h.logAccess(sess, http.MethodConnect, reqURL, "no-match", httperror.NoMatch.Status, treq)
+		return
+	}
+	if deny {
+		httperror.WriteResponse(conn, reqURL, httperror.RuleDenied)
+		h.logAccess(sess, http.MethodConnect, reqURL, "denied", httperror.RuleDenied.Status, treq)
 		return
 	}
 
@@ -494,7 +502,7 @@ func (h *Http1Handler) serveConnect(ctx context.Context, sess session.Session, b
 func (h *Http1Handler) serveTunnel(ctx context.Context, sess session.Session, tunnel net.Conn, dialer UpstreamDialer, dst, sni string, connIn rules.ConnInput, mitm bool, method, reqURL string, treq reqTrace, principal string) {
 	if !mitm {
 		h.logAccess(sess, method, reqURL, "splice (mitm:false)", 0, treq)
-		rawSplice(ctx, tunnel, dialer, dst)
+		rawSplice(ctx, tunnel, dialer, dst, h.Metrics)
 		return
 	}
 
@@ -612,9 +620,13 @@ func (h *Http1Handler) serveAbsoluteForm(ctx context.Context, sess session.Sessi
 	// forwarded upstream, regardless of whether auth was even configured.
 	req.Header.Del("Proxy-Authorization")
 
-	if _, matched := ruleSet.LookupConn(connIn); !matched {
+	if _, deny, matched := ruleSet.LookupConn(connIn); !matched {
 		httperror.WriteResponse(conn, req.URL.String(), httperror.NoMatch)
 		h.logAccess(sess, req.Method, req.URL.String(), "no-match", httperror.NoMatch.Status, treq)
+		return
+	} else if deny {
+		httperror.WriteResponse(conn, req.URL.String(), httperror.RuleDenied)
+		h.logAccess(sess, req.Method, req.URL.String(), "denied", httperror.RuleDenied.Status, treq)
 		return
 	}
 
@@ -834,10 +846,13 @@ func (h *Http1Handler) handleOneRequest(ctx context.Context, sess session.Sessio
 	}
 
 	closeAfter := req.Close || resp.Close
-	if err := resp.Write(client); err != nil {
+	cw := &countingWriter{w: client}
+	if err := resp.Write(cw); err != nil {
+		h.Metrics.BytesStreamed(ctx, "down", cw.n)
 		h.logAccessErr(sess, req.Method, url, "client-write-error", resp.StatusCode, treq, err)
 		return false
 	}
+	h.Metrics.BytesStreamed(ctx, "down", cw.n)
 	h.logAccess(sess, req.Method, url, "ok", resp.StatusCode, treq)
 
 	// "WebSocket / CONNECT upgrades: after headers, switch to a raw
@@ -849,7 +864,7 @@ func (h *Http1Handler) handleOneRequest(ctx context.Context, sess session.Sessio
 	if resp.StatusCode == http.StatusSwitchingProtocols {
 		if hj, ok := roundTripper.(rawUpgrader); ok {
 			upConn, upBR := hj.Hijack()
-			relay(drainBuffered(clientBR, client), drainBuffered(upBR, upConn))
+			relay(ctx, drainBuffered(clientBR, client), drainBuffered(upBR, upConn), h.Metrics)
 		}
 		return false
 	}

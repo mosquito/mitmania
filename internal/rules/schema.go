@@ -167,14 +167,35 @@ func (p Params) StringSlice(key string) ([]string, bool) {
 	return out, true
 }
 
+// Connection is a Rule's phase-1 ("connection checks": peek SNI/authority,
+// before rule matching decides mitm) accept/reject verdict. Accept:false
+// rejects the connection outright — no dial, no TLS termination, no
+// interception of any kind — purely by connection-phase identity
+// (host/port/proto, e.g. SNI), without needing the client to trust
+// mitmania's signing CA: mitm:true + a request-phase block/raise action
+// can also reject, but only after terminating TLS to reach the message
+// phase, which mitm:false alone (splice-through) cannot do at all.
+// Accept:true is valid and is simply the (already-default) phase-1
+// behavior stated explicitly — a no-op, so it can be freely combined with
+// mitm/message fields/actions (useful as a self-documenting exception
+// ahead of a broader accept:false rule). Accept is required whenever
+// Connection is present — there's no sensible reading of an empty object.
+type Connection struct {
+	Accept *bool `json:"accept"`
+}
+
 // Rule is one entry in a RuleFile's protocol list, evaluated top-down,
 // first-match-wins — exactly one rule's pipeline runs per request, no
 // cascading (iptables-like).
 type Rule struct {
-	Match    Match    `json:"match"`
-	MITM     *bool    `json:"mitm,omitempty"` // nil = default true
-	Request  []Action `json:"request,omitempty"`
-	Response []Action `json:"response,omitempty"`
+	Match Match `json:"match"`
+	// Connection is phase 1 (connection checks); MITM is phase 2 (rule
+	// matching decides whether to intercept). See Connection's doc
+	// comment for how Connection:{accept:false} relates to MITM.
+	Connection *Connection `json:"connection,omitempty"`
+	MITM       *bool       `json:"mitm,omitempty"` // nil = default true
+	Request    []Action    `json:"request,omitempty"`
+	Response   []Action    `json:"response,omitempty"`
 }
 
 func (r Rule) mitm() bool {

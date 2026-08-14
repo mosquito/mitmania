@@ -52,7 +52,7 @@ Do not weaken these accidentally:
 - DNS is resolved once per connection and the approved address is pinned to prevent rebinding.
 - The proxy's own data, control, Storage, and broker endpoints cannot be reached through the proxied data path.
 - Rules and egress entries are ordered, first-match lists. Do not introduce accidental cascading.
-- No connection rule match fails closed with `511`; egress refusal fails with `403 ERR_FORWARDING_DENIED`.
+- No connection rule match fails closed with `511`; egress refusal fails with `403 ERR_FORWARDING_DENIED`; an explicit `connection: {"accept": false}` rule fails closed with `403 ERR_RULE_DENIED`, before any dial or TLS termination — distinct from a `mitm:true` rule's later request-phase block.
 - Proxy authentication is a gate and attribution source, not a rule-file selector.
 - `mitm:false` is a raw encrypted splice. It cannot make claims about method, path, headers, or body.
 - Header and body limits remain bounded; large bodies continue to stream.

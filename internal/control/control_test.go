@@ -310,7 +310,7 @@ func TestControl_DeleteRule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Lookup: %v", err)
 	}
-	if _, matched := rs.LookupConn(rules.ConnInput{Host: "x", Proto: "https"}); matched {
+	if _, _, matched := rs.LookupConn(rules.ConnInput{Host: "x", Proto: "https"}); matched {
 		t.Fatalf("engine still matched a connection-phase rule after DELETE")
 	}
 

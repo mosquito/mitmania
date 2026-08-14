@@ -28,7 +28,7 @@ func TestMetrics_NilReceiverIsNoOp(t *testing.T) {
 	// None of these may panic on a nil *Metrics.
 	m.ConnectionOpened(ctx, "http_proxy", "explicit")
 	m.ConnectionClosed(ctx, "http_proxy", "explicit")
-	m.Request(ctx, "h1", "ok", "2xx", time.Millisecond)
+	m.Request(ctx, "h1", "ok", "2xx", "allow", "true", time.Millisecond)
 	m.BytesStreamed(ctx, "up", 1024)
 	m.UpstreamDial(ctx, "h1", "ok", time.Millisecond)
 	m.UpstreamTTFB(ctx, "h1", time.Millisecond)
@@ -56,7 +56,7 @@ func TestMetrics_RequestRecordsCounterAndHistogram(t *testing.T) {
 		t.Fatalf("NewMetrics: %v", err)
 	}
 	ctx := context.Background()
-	m.Request(ctx, "h1", "ok", "2xx", 42*time.Millisecond)
+	m.Request(ctx, "h1", "ok", "2xx", "allow", "true", 42*time.Millisecond)
 
 	var rm metricdata.ResourceMetrics
 	if err := reader.Collect(ctx, &rm); err != nil {
@@ -67,6 +67,12 @@ func TestMetrics_RequestRecordsCounterAndHistogram(t *testing.T) {
 	sum, ok := total.Data.(metricdata.Sum[int64])
 	if !ok || len(sum.DataPoints) != 1 || sum.DataPoints[0].Value != 1 {
 		t.Fatalf("requests.total = %#v, want a single point with value 1", total.Data)
+	}
+	if got, _ := attrValue(t, sum.DataPoints[0].Attributes, "verdict"); got != "allow" {
+		t.Errorf("verdict attribute = %q, want \"allow\"", got)
+	}
+	if got, _ := attrValue(t, sum.DataPoints[0].Attributes, "mitm"); got != "true" {
+		t.Errorf("mitm attribute = %q, want \"true\"", got)
 	}
 
 	dur := findMetric(t, &rm, "mitmania.request.duration")

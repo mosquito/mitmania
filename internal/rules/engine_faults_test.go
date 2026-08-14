@@ -161,7 +161,7 @@ func TestRuleEngine_DefaultMintPersistFailure_StillReturnsCompiledTable(t *testi
 	if err != nil {
 		t.Fatalf("Lookup: %v", err)
 	}
-	if _, matched := rs.LookupConn(ConnInput{Host: "anything", Port: "443", Proto: "https"}); matched {
+	if _, _, matched := rs.LookupConn(ConnInput{Host: "anything", Port: "443", Proto: "https"}); matched {
 		t.Fatalf("expected the empty compiled bucket to still match nothing, despite the persist failure")
 	}
 }

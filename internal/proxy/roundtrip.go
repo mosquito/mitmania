@@ -147,6 +147,7 @@ func (rt *h1RoundTripper) roundTripOnce(ctx context.Context, conn *prependConn, 
 	}
 	cw := &countingWriter{w: conn}
 	writeErr := req.Write(cw)
+	rt.metrics.BytesStreamed(ctx, "up", cw.n) // whatever actually made it onto the wire, even on a partial-write error
 	if reqSpan != nil {
 		if writeErr != nil {
 			reqSpan.RecordError(writeErr)

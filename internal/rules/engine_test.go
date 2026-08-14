@@ -113,7 +113,7 @@ func TestLookupConn_MitmFalsePrecedesMessageRuleForSameHost(t *testing.T) {
 	}`)
 	rs := &RuleSet{rules: compiled}
 
-	mitm, matched := rs.LookupConn(ConnInput{Host: "internal.corp", Port: "443", Proto: "https"})
+	mitm, _, matched := rs.LookupConn(ConnInput{Host: "internal.corp", Port: "443", Proto: "https"})
 	if !matched {
 		t.Fatalf("LookupConn: no match")
 	}
@@ -125,9 +125,60 @@ func TestLookupConn_MitmFalsePrecedesMessageRuleForSameHost(t *testing.T) {
 func TestLookupConn_NoMatch(t *testing.T) {
 	compiled := mustCompile(t, `{"http":[{"match":{"host":"only-this.example.com"}}]}`)
 	rs := &RuleSet{rules: compiled}
-	_, matched := rs.LookupConn(ConnInput{Host: "other.example.com", Port: "443", Proto: "https"})
+	_, _, matched := rs.LookupConn(ConnInput{Host: "other.example.com", Port: "443", Proto: "https"})
 	if matched {
 		t.Fatalf("LookupConn: unexpected match")
+	}
+}
+
+// TestLookupConn_DenyPrecedesMitmRuleForSameHost proves a deny rule wins
+// on first-match ordering exactly like any other rule — and reports
+// deny:true, mitm:false (mitm is never decided for a denied connection).
+func TestLookupConn_DenyPrecedesMitmRuleForSameHost(t *testing.T) {
+	compiled := mustCompile(t, `{
+	  "http": [
+	    { "match": { "host": "ads.example" }, "connection": { "accept": false } },
+	    { "match": { "host": "ads.example" } }
+	  ]
+	}`)
+	rs := &RuleSet{rules: compiled}
+
+	mitm, deny, matched := rs.LookupConn(ConnInput{Host: "ads.example", Port: "443", Proto: "https"})
+	if !matched {
+		t.Fatalf("LookupConn: no match")
+	}
+	if !deny {
+		t.Fatalf("deny = false, want true (deny rule should win, being first)")
+	}
+	if mitm {
+		t.Fatalf("mitm = true, want false when deny is true")
+	}
+}
+
+// TestLookupRequest_NeverSelectsDenyRule proves a deny rule, despite
+// having no message-phase fields (so its wildcard path/method/header
+// would otherwise match anything), is never returned by LookupRequest —
+// a denied connection never reaches interception, so it can never reach
+// message-phase selection either.
+func TestLookupRequest_NeverSelectsDenyRule(t *testing.T) {
+	compiled := mustCompile(t, `{
+	  "http": [
+	    { "match": { "host": "ads.example" }, "connection": { "accept": false } },
+	    { "match": { "host": "ads.example" },
+	      "request": [ {"action":"header.add","params":{"X-Fallback":"1"}} ] }
+	  ]
+	}`)
+	rs := &RuleSet{rules: compiled}
+
+	r, ok := rs.LookupRequest(MsgInput{
+		ConnInput: ConnInput{Host: "ads.example", Port: "443", Proto: "https"},
+		Header:    http.Header{},
+	})
+	if !ok {
+		t.Fatalf("LookupRequest: no match")
+	}
+	if len(r.request) == 0 || r.request[0].Params["X-Fallback"] != "1" {
+		t.Fatalf("LookupRequest selected the deny rule instead of skipping to the fallback: %+v", r.request)
 	}
 }
 
@@ -226,7 +277,7 @@ func TestRuleEngine_UnknownClientGetsEmptyRuleSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Lookup: %v", err)
 	}
-	if _, matched := rs.LookupConn(ConnInput{Host: "anything", Port: "443", Proto: "https"}); matched {
+	if _, _, matched := rs.LookupConn(ConnInput{Host: "anything", Port: "443", Proto: "https"}); matched {
 		t.Fatalf("expected no match against an empty ruleset")
 	}
 }

@@ -36,7 +36,7 @@ func TestSetupMetrics_EmptyURLDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMetrics: %v", err)
 	}
-	m.Request(context.Background(), "h1", "ok", "2xx", time.Millisecond)
+	m.Request(context.Background(), "h1", "ok", "2xx", "allow", "true", time.Millisecond)
 }
 
 func TestSetupMetrics_RejectsUnsupportedScheme(t *testing.T) {
@@ -65,7 +65,7 @@ func TestSetupMetrics_ServesScrapeEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMetrics: %v", err)
 	}
-	m.Request(context.Background(), "h1", "ok", "2xx", 15*time.Millisecond)
+	m.Request(context.Background(), "h1", "ok", "2xx", "allow", "true", 15*time.Millisecond)
 
 	resp, err := http.Get("http://" + mp.Addr + "/metrics")
 	if err != nil {

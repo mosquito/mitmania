@@ -501,6 +501,37 @@ func TestHTTP1Handler_AbsoluteFormPlainHTTP(t *testing.T) {
 	}
 }
 
+// TestHTTP1Handler_AbsoluteFormConnectionDenyGives403 covers
+// serveAbsoluteForm's deny branch — the absolute-form twin of
+// TestHTTP1Handler_ConnectionDenyGives403, proving the same
+// connection: {"accept": false} short-circuit applies to plain-HTTP
+// absolute-form requests, not just CONNECT tunnels.
+func TestHTTP1Handler_AbsoluteFormConnectionDenyGives403(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("origin was reached; a denied connection should never be dialed")
+	}))
+	defer origin.Close()
+	host, _, _ := net.SplitHostPort(origin.Listener.Addr().String())
+
+	ruleJSON := fmt.Sprintf(`{"http":[{"match":{"host":%q},"connection":{"accept":false}}]}`, host)
+	handler, _ := newTestHandler(t, ruleJSON)
+	proxyAddr := runProxy(t, handler)
+	client := proxyHTTPClient(t, proxyAddr, nil)
+
+	resp, err := client.Get(origin.URL + "/plain")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusForbidden)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "ERR_RULE_DENIED") {
+		t.Fatalf("body does not look like the RuleDenied page:\n%s", body)
+	}
+}
+
 // TestReadBoundedRequest_MalformedStartLine covers readBoundedRequest's
 // http.ReadRequest failure branch specifically — distinct from the
 // HeaderLimit trip (TestReadBoundedRequest_OversizedHeaders_SquidPage):
@@ -711,6 +742,35 @@ func TestHTTP1Handler_NoMatchGives511(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	if !strings.Contains(string(body), "ERR_ACCESS_DENIED") {
 		t.Fatalf("body does not look like the Squid no-match page:\n%s", body)
+	}
+}
+
+// TestHTTP1Handler_ConnectionDenyGives403 covers serveConnect's deny
+// branch: a connection: {"accept": false} match rejects the CONNECT
+// outright, with a 403 ERR_RULE_DENIED response and the origin never
+// dialed — distinct from an outright no-match (511) and from a mitm:true
+// rule's later message-phase block (which requires TLS termination first).
+func TestHTTP1Handler_ConnectionDenyGives403(t *testing.T) {
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("origin was reached; a denied connection should never be dialed")
+	}))
+	defer origin.Close()
+	target := origin.Listener.Addr().String()
+	host, _, _ := net.SplitHostPort(target)
+
+	ruleJSON := fmt.Sprintf(`{"http":[{"match":{"host":%q},"connection":{"accept":false}}]}`, host)
+	handler, _ := newTestHandler(t, ruleJSON)
+	proxyAddr := runProxy(t, handler)
+
+	resp, conn := rawConnect(t, proxyAddr, target)
+	defer conn.Close()
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusForbidden)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "ERR_RULE_DENIED") {
+		t.Fatalf("body does not look like the RuleDenied page:\n%s", body)
 	}
 }
 
