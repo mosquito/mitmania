@@ -3,3 +3,4 @@
 *.test
 *.out
 site/
+__pycache__/
