@@ -246,6 +246,126 @@ func TestServeTransparent_NoMatch_FailsClosed(t *testing.T) {
 	}
 }
 
+// TestServeTransparent_TLS_ConnectionDeny_ConnectionDropped proves
+// serveTransparentTLS's deny branch: a connection: {"accept": false} match
+// on SNI drops the connection with no bytes written at all — same as a
+// no-match, but reached via a rule that explicitly named this host rather
+// than an absence of any matching rule.
+func TestServeTransparent_TLS_ConnectionDeny_ConnectionDropped(t *testing.T) {
+	origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("origin should never be dialed for a denied connection")
+	}))
+	defer origin.Close()
+	dst := mustAddrPort(t, origin.Listener.Addr().String())
+
+	handler, _ := newTestHandler(t, `{"http":[{"match":{"host":"ads.example"},"connection":{"accept":false}}]}`)
+	buf := &syncBuffer{}
+	handler.Logger = slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	proxyAddr := runTransparentProxy(t, handler, session.TransportRedirect, dst)
+
+	raw, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer raw.Close()
+
+	tlsConn := tls.Client(raw, &tls.Config{ServerName: "ads.example", InsecureSkipVerify: true})
+	tlsConn.SetDeadline(time.Now().Add(3 * time.Second))
+	if err := tlsConn.Handshake(); err == nil {
+		t.Fatal("Handshake: want an error (connection dropped after deny), got success")
+	}
+
+	log := waitForSubstring(t, buf, "outcome=")
+	if !strings.Contains(log, "outcome=denied") {
+		t.Fatalf("outcome = %q, want denied", log)
+	}
+}
+
+// TestServeTransparent_OpaqueTCP_ConnectionDeny_ConnectionDropped proves
+// serveTransparentOpaque's deny branch: a connection: {"accept": false}
+// match on the literal, kernel-recovered destination IP drops the
+// connection before any dial — the opaque-TCP twin of
+// TestServeTransparent_TLS_ConnectionDeny_ConnectionDropped.
+func TestServeTransparent_OpaqueTCP_ConnectionDeny_ConnectionDropped(t *testing.T) {
+	dst := rawEchoServer(t)
+
+	ruleJSON := fmt.Sprintf(`{"http":[{"match":{"host":%q,"proto":"tcp"},"connection":{"accept":false}}]}`, dst.Addr().String())
+	handler, _ := newTestHandler(t, ruleJSON)
+	buf := &syncBuffer{}
+	handler.Logger = slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	proxyAddr := runTransparentProxy(t, handler, session.TransportRedirect, dst)
+
+	conn, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+	payload := []byte("\x00\x01not-http-not-tls-random-bytes\xff\xfe")
+	if _, err := conn.Write(payload); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	conn.(*net.TCPConn).CloseWrite()
+
+	got, err := io.ReadAll(conn)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("got %q back, want the connection dropped with zero bytes (no splice for a denied connection)", got)
+	}
+
+	log := waitForSubstring(t, buf, "outcome=")
+	if !strings.Contains(log, "outcome=denied") {
+		t.Fatalf("outcome = %q, want denied", log)
+	}
+}
+
+// TestServeTransparent_OpaqueTCP_HostHeaderConnectionDeny proves
+// serveTransparentOpaqueMITM's own deny branch: the destination IP matches
+// a plain mitm:true rule (so the opaque connection is parsed as HTTP), but
+// the parsed request's Host header then matches a *different* rule that
+// denies the connection outright — the message-phase re-lookup must still
+// honor connection: {"accept": false}, not just the first, dst-IP-based
+// LookupConn call.
+func TestServeTransparent_OpaqueTCP_HostHeaderConnectionDeny(t *testing.T) {
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("origin should never be dialed for a denied connection")
+	}))
+	defer origin.Close()
+	dst := mustAddrPort(t, origin.Listener.Addr().String())
+
+	ruleJSON := fmt.Sprintf(`{"http":[
+	  {"match":{"host":%q,"proto":"tcp"}},
+	  {"match":{"host":"ads.example"},"connection":{"accept":false}}
+	]}`, dst.Addr().String())
+	handler, _ := newTestHandler(t, ruleJSON)
+	buf := &syncBuffer{}
+	handler.Logger = slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	proxyAddr := runTransparentProxy(t, handler, session.TransportRedirect, dst)
+
+	conn, err := net.Dial("tcp", proxyAddr)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+	hostHeader := fmt.Sprintf("ads.example:%d", dst.Port())
+	fmt.Fprintf(conn, "GET / HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", hostHeader)
+	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+
+	got, err := io.ReadAll(conn)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("got %q back, want the connection dropped with zero bytes", got)
+	}
+
+	log := waitForSubstring(t, buf, "outcome=")
+	if !strings.Contains(log, "outcome=denied") {
+		t.Fatalf("outcome = %q, want denied", log)
+	}
+}
+
 // TestServeTransparent_EgressDenied_FailsClosed proves egress policy
 // still applies with a literal, kernel-recovered Dst: a client whose SNI
 // matches a rule, but whose Dst falls in a denied CIDR, never reaches
