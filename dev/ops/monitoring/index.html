@@ -1562,6 +1562,23 @@
   </div>
   <div class="typography w-full flex-1 *:data-[slot=alert]:first:mt-0">
     <p>Expose a Prometheus endpoint with <code>--otel-metrics http://127.0.0.1:9464/metrics</code>, then scrape that exact path. The <a href="../../reference/metrics/">metrics catalog</a> is the full instrument list; this page is the subset worth alerting on and how to read it.</p>
+<h2 id="import-the-grafana-dashboard">Import the Grafana dashboard<a class="headerlink" href="#import-the-grafana-dashboard" title="Permanent link">&para;</a></h2>
+<p>The repository includes two importable dashboards for the full metric catalog. Both cover fleet load, final policy outcomes, upstream health, Storage, rules, certificates, TLS, and broker outcalls:</p>
+<ul>
+<li><a href="../../assets/mitmania-grafana.json">Grafana dashboard for Prometheus</a> uses Grafana's built-in Prometheus data source.</li>
+<li>
+<p><a href="../../assets/mitmania-victoriametrics-grafana.json">Grafana dashboard for VictoriaMetrics</a> uses the official <a href="https://docs.victoriametrics.com/victoriametrics/integrations/grafana/datasource/"><code>victoriametrics-metrics-datasource</code></a> plugin. Its queries use the PromQL subset of MetricsQL, so the panels have the same semantics as the Prometheus version.</p>
+</li>
+<li>
+<p>Configure Prometheus, vmagent, or VictoriaMetrics' native scraper to scrape every mitmania node's metrics endpoint.</p>
+</li>
+<li>In Grafana, import the JSON file matching the metrics backend.</li>
+<li>Select the backend data source when Grafana prompts for <code>DS_PROMETHEUS</code> or <code>DS_VICTORIAMETRICS</code>.</li>
+<li>Use the dashboard's <strong>Scrape job</strong> and <strong>Instance</strong> variables to select the fleet or node to inspect.</li>
+<li>If <code>--outcall-max-inflight</code> is not its default of <code>64</code>, set <strong>Outcall capacity</strong> to the configured value so the saturation gauge is accurate.</li>
+</ul>
+<p>For single-node VictoriaMetrics, point its Grafana data source at <code>http://&lt;victoriametrics&gt;:8428</code>. For a cluster, use the vmselect query endpoint <code>http://&lt;vmselect&gt;:8481/select/&lt;tenant&gt;/prometheus</code>.</p>
+<p>The dashboard treats <code>splice (mitm:false)</code> as successful raw encrypted traffic and <code>empty-connection</code> as neutral listener churn. It keeps <code>no-match</code>, <code>forwarding-denied</code>, authentication failures, and deliberate rule blocks distinct so policy behavior is not confused with upstream failure. Panels for message-phase TTFB, bytes, TLS termination, certificates, and outcalls remain empty until those paths are exercised; that is expected on a pure <code>mitm:false</code> deployment.</p>
 <h2 id="signals-that-matter">Signals that matter<a class="headerlink" href="#signals-that-matter" title="Permanent link">&para;</a></h2>
 <div class="table-wrapper"><table>
 <thead>
@@ -2135,6 +2152,14 @@
         
         
         
+        
+        <a href="#import-the-grafana-dashboard"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="2" onClick="deferSetActiveTocLink('#import-the-grafana-dashboard');">
+            Import the Grafana dashboard
+        </a>
+        
+
         
         <a href="#signals-that-matter"
             class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
