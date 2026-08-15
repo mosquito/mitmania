@@ -119,6 +119,86 @@ The seed is a safe floor, not a working policy: it blocks SSRF-style egress
 out of the box while still requiring you to add `http[]` rules before any
 request succeeds.
 
+## Generate an advertising and tracker policy
+
+`tools/adblock_to_mitmania.py` converts hostname-wide entries from maintained
+filter sources into ordered mitmania rules. These publisher presets are
+available:
+
+| Preset | Publisher source | Default |
+| --- | --- | --- |
+| `hagezi-light` | `https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/light.txt` | Yes |
+| `hagezi-tif-mini` | `https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/tif.mini.txt` | Yes |
+| `adblock` (EasyList) | `https://easylist-downloads.adblockplus.org/easylist.txt` | No |
+| `easyprivacy` | `https://easylist.to/easylist/easyprivacy.txt` | No |
+| `adguard` | `https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt` | No |
+| `ublock` | `https://ublockorigin.github.io/uAssets/filters/filters.txt` | No |
+| `ublock-privacy` | `https://ublockorigin.github.io/uAssets/filters/privacy.txt` | No |
+| `peterlowe` | `https://pgl.yoyo.org/adservers/serverlist.php?hostformat=plain&mimetype=plaintext&showintro=0` | No |
+| `ghostery` | `https://github.com/ghostery/trackerdb/archive/refs/heads/main.tar.gz` | No |
+
+The no-argument policy combines HaGeZi Multi Light for relaxed ad and tracker
+blocking with HaGeZi TIF Mini for malware, phishing, scam, and command-and-
+control protection. The broader browser and privacy lists remain explicit
+opt-ins because a whole-host connection decision cannot preserve their page,
+request-type, or application context. Test any broader selection against the
+proxied clients in scope.
+
+Update the current `rules/default` through the local control socket:
+
+```sh
+python3 tools/adblock_to_mitmania.py \
+  --control "unix://$PWD/mitmania.sock"
+```
+
+The converter fetches the current table, prepends the generated filter rules
+to every bucket, preserves its `uuid`, auth, egress, and existing `http[]`
+values, then submits the complete replacement. The update still passes the
+production parser, compiler, coverage check, and control API size limit.
+
+Use one or more named presets to select providers explicitly:
+
+```sh
+python3 tools/adblock_to_mitmania.py \
+  --preset all \
+  --control "unix://$PWD/mitmania.sock"
+```
+
+`--preset all` selects the strict union of every provider. Sources may overlap;
+the converter deduplicates effective domains before generating rules.
+`--preset ghostery` selects Ghostery alone. Available provider presets are `adblock`,
+`easyprivacy`, `adguard`, `ublock`, `ublock-privacy`, `peterlowe`,
+`hagezi-light`, `hagezi-tif-mini`, and `ghostery`. Every preset constructs its
+provider from that class's maintained `default_url`. Custom sources are typed
+as `provider=location`, which prevents an archive from being interpreted by
+the wrong parser:
+
+```sh
+python3 tools/adblock_to_mitmania.py \
+  ublock=https://filters.example/ads.txt \
+  adguard=/etc/mitmania/local-adguard.txt \
+  ghostery=/var/cache/mitmania/trackerdb.tar.gz \
+  --output generated-rules.json
+```
+
+The location is an HTTP(S) URL, a local file, or `-` for standard input.
+Explicit sources without `--preset` replace the defaults. Before downloading
+a provider, `--control` first verifies that it can read the current table.
+Progress logs report mined rule counts per provider and the final
+effective-domain and generated-rule counts. Run
+`python3 tools/adblock_to_mitmania.py --help` for output shapes, size bounds,
+Ghostery category selection, and dry-file generation options.
+
+!!! warning "Blocking rejects the connection"
+    The default `--action block` emits a connection-phase `accept:false` rule.
+    It rejects a selected hostname before TLS termination and does not require
+    the proxied client to trust the signing CA. Use `--action raise` only when
+    the proxied client trusts the signing CA and an HTTP status and body are
+    preferable to a closed connection.
+    Review the source licenses before redistributing generated data; Ghostery
+    TrackerDB is CC-BY-NC-SA-4.0 and defaults to the advertising,
+    pornvertising, and site-analytics categories.
+
 ## Worked example
 
 A complete table with the two seed catch-alls, one plain-prefix bucket, and
