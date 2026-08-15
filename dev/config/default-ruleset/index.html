@@ -1715,6 +1715,114 @@ buckets:</p>
 <p>The seed is a safe floor, not a working policy: it blocks SSRF-style egress
 out of the box while still requiring you to add <code>http[]</code> rules before any
 request succeeds.</p>
+<h2 id="generate-an-advertising-and-tracker-policy">Generate an advertising and tracker policy<a class="headerlink" href="#generate-an-advertising-and-tracker-policy" title="Permanent link">&para;</a></h2>
+<p><code>tools/adblock_to_mitmania.py</code> converts hostname-wide entries from maintained
+filter sources into ordered mitmania rules. These publisher presets are
+available:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Preset</th>
+<th>Publisher source</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hagezi-light</code></td>
+<td><code>https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/light.txt</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>hagezi-tif-mini</code></td>
+<td><code>https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/tif.mini.txt</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>adblock</code> (EasyList)</td>
+<td><code>https://easylist-downloads.adblockplus.org/easylist.txt</code></td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>easyprivacy</code></td>
+<td><code>https://easylist.to/easylist/easyprivacy.txt</code></td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>adguard</code></td>
+<td><code>https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt</code></td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>ublock</code></td>
+<td><code>https://ublockorigin.github.io/uAssets/filters/filters.txt</code></td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>ublock-privacy</code></td>
+<td><code>https://ublockorigin.github.io/uAssets/filters/privacy.txt</code></td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>peterlowe</code></td>
+<td><code>https://pgl.yoyo.org/adservers/serverlist.php?hostformat=plain&amp;mimetype=plaintext&amp;showintro=0</code></td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>ghostery</code></td>
+<td><code>https://github.com/ghostery/trackerdb/archive/refs/heads/main.tar.gz</code></td>
+<td>No</td>
+</tr>
+</tbody>
+</table></div>
+<p>The no-argument policy combines HaGeZi Multi Light for relaxed ad and tracker
+blocking with HaGeZi TIF Mini for malware, phishing, scam, and command-and-
+control protection. The broader browser and privacy lists remain explicit
+opt-ins because a whole-host connection decision cannot preserve their page,
+request-type, or application context. Test any broader selection against the
+proxied clients in scope.</p>
+<p>Update the current <code>rules/default</code> through the local control socket:</p>
+<pre class="highlight"><code class="language-sh">python3 tools/adblock_to_mitmania.py \
+  --control "unix://$PWD/mitmania.sock"</code></pre>
+<p>The converter fetches the current table, prepends the generated filter rules
+to every bucket, preserves its <code>uuid</code>, auth, egress, and existing <code>http[]</code>
+values, then submits the complete replacement. The update still passes the
+production parser, compiler, coverage check, and control API size limit.</p>
+<p>Use one or more named presets to select providers explicitly:</p>
+<pre class="highlight"><code class="language-sh">python3 tools/adblock_to_mitmania.py \
+  --preset all \
+  --control "unix://$PWD/mitmania.sock"</code></pre>
+<p><code>--preset all</code> selects the strict union of every provider. Sources may overlap;
+the converter deduplicates effective domains before generating rules.
+<code>--preset ghostery</code> selects Ghostery alone. Available provider presets are <code>adblock</code>,
+<code>easyprivacy</code>, <code>adguard</code>, <code>ublock</code>, <code>ublock-privacy</code>, <code>peterlowe</code>,
+<code>hagezi-light</code>, <code>hagezi-tif-mini</code>, and <code>ghostery</code>. Every preset constructs its
+provider from that class's maintained <code>default_url</code>. Custom sources are typed
+as <code>provider=location</code>, which prevents an archive from being interpreted by
+the wrong parser:</p>
+<pre class="highlight"><code class="language-sh">python3 tools/adblock_to_mitmania.py \
+  ublock=https://filters.example/ads.txt \
+  adguard=/etc/mitmania/local-adguard.txt \
+  ghostery=/var/cache/mitmania/trackerdb.tar.gz \
+  --output generated-rules.json</code></pre>
+<p>The location is an HTTP(S) URL, a local file, or <code>-</code> for standard input.
+Explicit sources without <code>--preset</code> replace the defaults. Before downloading
+a provider, <code>--control</code> first verifies that it can read the current table.
+Progress logs report mined rule counts per provider and the final
+effective-domain and generated-rule counts. Run
+<code>python3 tools/adblock_to_mitmania.py --help</code> for output shapes, size bounds,
+Ghostery category selection, and dry-file generation options.</p>
+<div class="admonition warning">
+<p class="admonition-title">Blocking rejects the connection</p>
+<p>The default <code>--action block</code> emits a connection-phase <code>accept:false</code> rule.
+It rejects a selected hostname before TLS termination and does not require
+the proxied client to trust the signing CA. Use <code>--action raise</code> only when
+the proxied client trusts the signing CA and an HTTP status and body are
+preferable to a closed connection.
+Review the source licenses before redistributing generated data; Ghostery
+TrackerDB is CC-BY-NC-SA-4.0 and defaults to the advertising,
+pornvertising, and site-analytics categories.</p>
+</div>
 <h2 id="worked-example">Worked example<a class="headerlink" href="#worked-example" title="Permanent link">&para;</a></h2>
 <p>A complete table with the two seed catch-alls, one plain-prefix bucket, and
 one sparse override:</p>
@@ -2355,6 +2463,14 @@ single bucket and <a href="../egress/">Egress policy</a> for the egress list.</p
             class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
             data-active="false" data-depth="2" onClick="deferSetActiveTocLink('#the-bootstrap-seed');">
             The bootstrap seed
+        </a>
+        
+
+        
+        <a href="#generate-an-advertising-and-tracker-policy"
+            class="text-muted-foreground hover:text-foreground data-[active=true]:text-foreground text-[0.8rem] no-underline transition-colors data-[depth=3]:pl-4 data-[depth=4]:pl-6"
+            data-active="false" data-depth="2" onClick="deferSetActiveTocLink('#generate-an-advertising-and-tracker-policy');">
+            Generate an advertising and tracker policy
         </a>
         
 
